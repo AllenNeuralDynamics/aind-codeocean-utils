@@ -1,23 +1,33 @@
-from pathlib import Path
+"""Module of classes to handle interfacing with the Code Ocean index."""
+
+import logging
 from typing import Iterator, List, Optional
 
 from aind_codeocean_api.codeocean import CodeOceanClient
-from requests import Response
 
 
 class APIHandler:
-    def __init__(
-        self, co_client: CodeOceanClient, log_file: Optional[Path] = None
-    ):
+    """Class to handle common tasks modifying the Code Ocean index."""
+
+    def __init__(self, co_client: CodeOceanClient, dryrun: bool = False):
+        """
+        Class constructor
+        Parameters
+        ----------
+        co_client : CodeOceanClient
+        dryrun : bool
+          Perform a dryrun of the operations without actually making any
+          changes to the index.
+        """
         self.co_client = co_client
-        self.log_file = log_file
+        self.dryrun = dryrun
 
     def update_tags(
         self,
         tags_to_remove: Optional[List[str]] = None,
         tags_to_add: Optional[List[str]] = None,
         data_assets=Iterator[dict],
-    ) -> Iterator[Response]:
+    ) -> None:
         """
         Updates tags for a list of data assets. Will first remove tags in the
         tags_to_remove list if they exist, and then add the tags_to_add. Will
@@ -39,22 +49,34 @@ class APIHandler:
 
         Returns
         -------
-        Iterator[Response]
-          An iterator of the responses from the update metadata requests.
+        None
+          Logs the responses
 
         """
-
         for data_asset in data_assets:
+            tags_to_filter_from_original = set(tags_to_remove + tags_to_add)
             filtered_tags = [
-                tag for tag in data_asset["tags"] if tag not in tags_to_remove
+                tag
+                for tag in data_asset["tags"]
+                if tag not in tags_to_filter_from_original
             ]
-            complete_tags = list(set(tags_to_add + filtered_tags))
+            complete_tags = filtered_tags + tags_to_add
             data_asset_id = data_asset["id"]
             data_asset_name = data_asset["name"]
+            logging.debug(f"Updating data asset: {data_asset}")
             # new_name is a required field, we can set it to the original name
-            response = self.co_client.update_data_asset(
-                data_asset_id=data_asset_id,
-                new_name=data_asset_name,
-                new_tags=complete_tags,
-            )
-            yield response
+            if self.dryrun is True:
+                logging.info(
+                    f"(dryrun): "
+                    f"co_client.update_data_asset("
+                    f"data_asset_id={data_asset_id},"
+                    f"new_name={data_asset_name},"
+                    f"new_tags={complete_tags},)"
+                )
+            else:
+                response = self.co_client.update_data_asset(
+                    data_asset_id=data_asset_id,
+                    new_name=data_asset_name,
+                    new_tags=complete_tags,
+                )
+                logging.info(response.json())
