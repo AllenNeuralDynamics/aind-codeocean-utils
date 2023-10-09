@@ -17,6 +17,7 @@ readme = "README.md"
 dynamic = ["version"]
 
 dependencies = [
+    "aind-codeocean-api==0.2.5"
 ]
 
 [project.optional-dependencies]
@@ -38,7 +39,7 @@ version = {attr = "aind_codeocean_utils.__version__"}
 
 [tool.black]
 line-length = 79
-target_version = ['py36']
+target_version = ['py37']
 exclude = '''
 
 (
