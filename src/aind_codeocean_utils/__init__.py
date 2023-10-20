@@ -1,5 +1,5 @@
 """Library with helpful methods for making changes to the code ocean index."""
-__version__ = "0.0.1"
+__version__ = "0.0.2"
 
 # Set default logging handler to avoid "No handler found" warnings.
 # Borrowing logging setup from urllib3: https://urllib3.readthedocs.io/
