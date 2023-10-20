@@ -3,7 +3,7 @@ on:
   push:
     branches:
       - main
-# Change line 66 from "if: false" to "if: true" to enable PyPI publishing.
+
 jobs:
   update_badges:
     runs-on: ubuntu-latest
@@ -61,7 +61,6 @@ jobs:
       SERVICE_TOKEN: ${{ secrets.SERVICE_TOKEN }}
   publish:
     needs: tag
-    if: false
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
