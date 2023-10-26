@@ -1,7 +1,7 @@
 """Module of classes to handle interfacing with the Code Ocean index."""
 
 import logging
-from typing import Iterator, List, Optional
+from typing import Dict, Iterator, List, Optional
 
 from aind_codeocean_api.codeocean import CodeOceanClient
 
@@ -26,20 +26,25 @@ class APIHandler:
         self,
         tags_to_remove: Optional[List[str]] = None,
         tags_to_add: Optional[List[str]] = None,
+        tags_to_replace: Optional[Dict[str, str]] = None,
         data_assets=Iterator[dict],
     ) -> None:
         """
         Updates tags for a list of data assets. Will first remove tags in the
         tags_to_remove list if they exist, and then add the tags_to_add. Will
         keep the tags already on the data asset if they are not explicitly set
-        in the tags_to_remove list. Will change every data asset in
-        data_assets.
+        in the tags_to_remove list. Will use tags_to_replace dictionary to
+        replace tags directly. Note, the tags_to_replace will be performed
+        after tags_to_remove and tags_to_add if those are not None.
         Parameters
         ----------
         tags_to_remove : Optional[List[str]]
           Optional list of tags to remove from a data asset
         tags_to_add: Optional[List[str]]
           Optional list of tags to add to a data asset
+        tags_to_replace: Optional[Dict[str, str]]
+          Optional dictionary of tags to replace. For example,
+          {"old_tag0": "new_tag0", "old_tag1": "new_tag1"}.
         data_assets : Iterator[dict]
           An iterator of data assets. The shape of the response is described
           at:
@@ -50,17 +55,22 @@ class APIHandler:
         Returns
         -------
         None
-          Logs the responses
+          Sends the requests and logs the responses.
 
         """
+        # Remove tags that are in tags_to_remove and then add tags
+        # that are in tags_to_add
+        tags_to_add = set() if tags_to_add is None else tags_to_add
+        tags_to_remove = set() if tags_to_remove is None else tags_to_remove
+        tags_to_replace = (
+            dict() if tags_to_replace is None else tags_to_replace
+        )
         for data_asset in data_assets:
-            tags_to_filter_from_original = set(tags_to_remove + tags_to_add)
-            filtered_tags = [
-                tag
-                for tag in data_asset["tags"]
-                if tag not in tags_to_filter_from_original
-            ]
-            complete_tags = filtered_tags + tags_to_add
+            # Remove tags in tags_to_remove
+            tags = set(data_asset["tags"])
+            tags.difference_update(tags_to_remove)
+            tags.update(tags_to_add)
+            mapped_tags = {tags_to_replace.get(tag, tag) for tag in tags}
             data_asset_id = data_asset["id"]
             data_asset_name = data_asset["name"]
             logging.debug(f"Updating data asset: {data_asset}")
@@ -71,12 +81,12 @@ class APIHandler:
                     f"co_client.update_data_asset("
                     f"data_asset_id={data_asset_id},"
                     f"new_name={data_asset_name},"
-                    f"new_tags={complete_tags},)"
+                    f"new_tags={mapped_tags},)"
                 )
             else:
                 response = self.co_client.update_data_asset(
                     data_asset_id=data_asset_id,
                     new_name=data_asset_name,
-                    new_tags=complete_tags,
+                    new_tags=mapped_tags,
                 )
                 logging.info(response.json())
