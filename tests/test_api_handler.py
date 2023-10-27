@@ -70,57 +70,59 @@ class TestAPIHandler(unittest.TestCase):
             tags_to_replace={"ECEPHYS": "ecephys"},
             data_assets=data_assets,
         )
-        mock_update.assert_has_calls(
-            [
-                call(
-                    data_asset_id="0faf14aa-13b9-450d-b26a-632935a4b763",
-                    new_name="ecephys_655019_2023-04-03_18-10-10",
-                    new_tags={"ecephys", "raw", "655019", "new_tag"},
+
+        expected_calls = [
+            {
+                "data_asset_id": "0faf14aa-13b9-450d-b26a-632935a4b763",
+                "new_name": "ecephys_655019_2023-04-03_18-10-10",
+                "new_tags": {"raw", "ecephys", "655019", "new_tag"},
+            },
+            {
+                "data_asset_id": "84586a1c-79cc-4240-b340-6049fe8469c2",
+                "new_name": "ecephys_655019_2023-04-03_18-17-09",
+                "new_tags": {"ecephys", "655019", "new_tag", "raw"},
+            },
+            {
+                "data_asset_id": "1936ae3a-73a8-422c-a7b1-1768732c6289",
+                "new_name": (
+                    "ecephys_661398_2023-03-31_17-01-09"
+                    "_nwb_2023-06-01_14-50-08"
                 ),
-                call(
-                    data_asset_id="84586a1c-79cc-4240-b340-6049fe8469c2",
-                    new_name="ecephys_655019_2023-04-03_18-17-09",
-                    new_tags={"ecephys", "raw", "655019", "new_tag"},
+                "new_tags": {"new_tag"},
+            },
+            {
+                "data_asset_id": "2481baf2-e9e8-4416-9a0b-d2ffe5782071",
+                "new_name": (
+                    "ecephys_660166_2023-03-16_18-30-14"
+                    "_curated_2023-03-24_17-54-16"
                 ),
-                call(
-                    data_asset_id="1936ae3a-73a8-422c-a7b1-1768732c6289",
-                    new_name=(
-                        "ecephys_661398_2023-03-31_17-01-09"
-                        "_nwb_2023-06-01_14-50-08"
-                    ),
-                    new_tags={"new_tag"},
+                "new_tags": {"new_tag"},
+            },
+            {
+                "data_asset_id": "fcd8bc84-bd48-4af7-8826-da5ceb5cdd3a",
+                "new_name": "ecephys_636766_2023-01-25_00-00-00",
+                "new_tags": {"new_tag"},
+            },
+            {
+                "data_asset_id": "fc915970-5489-4b6d-af94-620b067cd2cd",
+                "new_name": (
+                    "ecephys_636766_2023-01-23_00-00-00"
+                    "_sorted-ks2.5_2023-06-01_14-48-42"
                 ),
-                call(
-                    data_asset_id="2481baf2-e9e8-4416-9a0b-d2ffe5782071",
-                    new_name=(
-                        "ecephys_660166_2023-03-16_18-30-14"
-                        "_curated_2023-03-24_17-54-16"
-                    ),
-                    new_tags={"new_tag"},
+                "new_tags": {"new_tag"},
+            },
+            {
+                "data_asset_id": "63f2d2de-4af8-4397-94ab-9484c8e8c847",
+                "new_name": (
+                    "ecephys_622155_2022-05-31_15-29-16" "_2023-06-01_14-45-05"
                 ),
-                call(
-                    data_asset_id="fcd8bc84-bd48-4af7-8826-da5ceb5cdd3a",
-                    new_name="ecephys_636766_2023-01-25_00-00-00",
-                    new_tags={"new_tag"},
-                ),
-                call(
-                    data_asset_id="fc915970-5489-4b6d-af94-620b067cd2cd",
-                    new_name=(
-                        "ecephys_636766_2023-01-23_00-00-00"
-                        "_sorted-ks2.5_2023-06-01_14-48-42"
-                    ),
-                    new_tags={"new_tag"},
-                ),
-                call(
-                    data_asset_id="63f2d2de-4af8-4397-94ab-9484c8e8c847",
-                    new_name=(
-                        "ecephys_622155_2022-05-31_15-29-16"
-                        "_2023-06-01_14-45-05"
-                    ),
-                    new_tags={"new_tag"},
-                ),
-            ]
-        )
+                "new_tags": {"new_tag"},
+            },
+        ]
+        actual_calls = [c.kwargs for c in mock_update.mock_calls]
+        for row in actual_calls:
+            row["new_tags"] = set(row["new_tags"])
+        self.assertEqual(expected_calls, actual_calls)
         expected_debug_calls = [
             call(f"Updating data asset: {data_asset}")
             for data_asset in data_assets
@@ -169,7 +171,56 @@ class TestAPIHandler(unittest.TestCase):
             data_assets=data_assets,
         )
         self.api_handler.update_tags(
+            tags_to_add=["new_tag"],
             data_assets=data_assets,
+        )
+        self.api_handler.update_tags(
+            tags_to_remove=["test"],
+            data_assets=data_assets,
+        )
+        self.api_handler.update_tags(
+            tags_to_replace={"ECEPHYS": "ecephys"},
+            data_assets=data_assets,
+        )
+        self.api_handler.update_tags(
+            data_assets=data_assets,
+        )
+        data_assets_with_no_tags = [
+            {
+                "created": 1685645105,
+                "description": "",
+                "files": 10,
+                "id": "63f2d2de-4af8-4397-94ab-9484c8e8c847",
+                "last_used": 0,
+                "name": "test_data_with_empty_tags",
+                "sourceBucket": {
+                    "bucket": "",
+                    "origin": "local",
+                    "prefix": "",
+                },
+                "state": "ready",
+                "tags": [],
+                "type": "dataset",
+            },
+            {
+                "created": 1685645105,
+                "description": "",
+                "files": 10,
+                "id": "63f2d2de-4af8-4397-94ab-9484c8e8c847",
+                "last_used": 0,
+                "name": "test_data_with_missing_field",
+                "sourceBucket": {
+                    "bucket": "",
+                    "origin": "local",
+                    "prefix": "",
+                },
+                "state": "ready",
+                "type": "dataset",
+            },
+        ]
+        self.api_handler.update_tags(
+            tags_to_replace={"ECEPHYS": "ecephys"},
+            data_assets=data_assets_with_no_tags,
         )
         mock_log_info.assert_called()
         mock_log_debug.assert_called()

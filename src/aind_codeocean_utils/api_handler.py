@@ -67,7 +67,11 @@ class APIHandler:
         )
         for data_asset in data_assets:
             # Remove tags in tags_to_remove
-            tags = set(data_asset["tags"])
+            tags = (
+                set()
+                if data_asset.get("tags") is None
+                else set(data_asset["tags"])
+            )
             tags.difference_update(tags_to_remove)
             tags.update(tags_to_add)
             mapped_tags = {tags_to_replace.get(tag, tag) for tag in tags}
@@ -87,6 +91,6 @@ class APIHandler:
                 response = self.co_client.update_data_asset(
                     data_asset_id=data_asset_id,
                     new_name=data_asset_name,
-                    new_tags=mapped_tags,
+                    new_tags=list(mapped_tags),
                 )
                 logging.info(response.json())
