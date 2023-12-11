@@ -16,7 +16,8 @@ logger.setLevel(logging.INFO)
 
 class CodeOceanJob:
     """
-    This class contains convenient methods to register data assets, run capsules, and capture results.
+    This class contains convenient methods to register data assets,
+    run capsules, and capture results.
     """
 
     def __init__(self, co_client: CodeOceanClient):
@@ -37,8 +38,8 @@ class CodeOceanJob:
         pause_interval=10,
     ) -> requests.Response:
         """
-        There is a lag between when a register data request is made and when the
-        data is available to be used in a capsule.
+        There is a lag between when a register data request is made and
+        when the data is available to be used in a capsule.
         Parameters
         ----------
         data_asset_id : str
@@ -91,19 +92,19 @@ class CodeOceanJob:
         capsule_id : str
             ID of the Code Ocean capsule to be run
         data_assets : List[Dict]
-            List of data assets for the capsule to run against. The dict should
-            have the keys id and mount.
+            List of data assets for the capsule to run against. The dict
+            should have the keys id and mount.
         run_parameters : Optional[List]
             List of parameters to pass to the capsule.
         pause_interval : Optional[int]
             How often to check if the capsule run is finished.
-            If None, then the method will return immediately without waiting for
-            the computation to finish.
+            If None, then the method will return immediately without waiting
+            for the computation to finish.
         capsule_version : Optional[int]
             Run a specific version of the capsule to be run
         timeout_seconds : Optional[int]
-            If pause_interval is set, the max wait time to check if the capsule
-            is finished.
+            If pause_interval is set, the max wait time to check if the
+            capsule is finished.
 
         Returns
         -------
@@ -225,7 +226,8 @@ class CodeOceanJob:
                 data_asset_id=data_asset_id, everyone="viewer"
             )
             logger.info(
-                f"Permissions response: {update_data_perm_response.status_code}"
+                "Permissions response: "
+                f"{update_data_perm_response.status_code}"
             )
 
         return data_asset_reg_response
@@ -393,8 +395,9 @@ class CodeOceanJob:
         Returns
         -------
         dict
-            Dictionary with keys register, run, and capture. The values are the responses
-            from the register, run, and capture requests.
+            Dictionary with keys register, run, and capture.
+            The values are the responses from the register, run,
+            and capture requests.
 
         """
         # 1. register data assets
