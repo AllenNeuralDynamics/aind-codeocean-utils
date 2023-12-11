@@ -1,69 +1,52 @@
 """Module with generic Code Ocean job"""
+import logging
 import time
-from copy import deepcopy
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple, Union
 
+import requests
 from aind_codeocean_api.codeocean import CodeOceanClient
+
+LOG_FMT = "%(asctime)s %(message)s"
+LOG_DATE_FMT = "%Y-%m-%d %H:%M"
+
+logging.basicConfig(format=LOG_FMT, datefmt=LOG_DATE_FMT)
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 
 class CodeOceanJob:
-    """This class contains convenient methods that any Capsule Job can use.
-    Any child class needs to implement the run_job method."""
+    """
+    This class contains convenient methods to register data assets, run capsules, and capture results.
+    """
 
-    def __init__(
-        self, 
-        co_client: CodeOceanClient, 
-        capsule_or_pipeline_id: str,
-        data_assets: Optional[List[Dict]] = None,
-        run_parameters: Optional[List] = None,
-    ):
+    def __init__(self, co_client: CodeOceanClient):
         """
         CapsuleJob class constructor.
 
         Parameters
         ----------
-        configs : dict
-          Configuration parameters of the capsule job.
         co_client : CodeOceanClient
-          A client that can be used to interface with the Code Ocean API.
+            A client that can be used to interface with the Code Ocean API.
         """
         self.co_client = co_client
-        self.capsule_or_pipeline_id = capsule_or_pipeline_id
-        self._data_assets = data_assets
-        self._run_parameters = run_parameters
-
-    @property
-    def data_assets(self):
-        return self._data_assets
-
-    @data_assets.setter
-    def data_assets(self, data_assets: List[Dict]):
-        self._data_assets = data_assets
-
-    @property
-    def run_parameters(self):
-        return self._run_parameters
-
-    @run_parameters.setter
-    def run_parameters(self, run_parameters: List):
-        self._run_parameters = run_parameters
 
     def wait_for_data_availability(
         self,
         data_asset_id: str,
         timeout_seconds: int = 300,
         pause_interval=10,
-    ):
+    ) -> requests.Response:
         """
         There is a lag between when a register data request is made and when the
         data is available to be used in a capsule.
         Parameters
         ----------
         data_asset_id : str
+            ID of the data asset to check for.
         timeout_seconds : int
-          Roughly how long the method should check if the data is available.
+            Roughly how long the method should check if the data is available.
         pause_interval : int
-          How many seconds between when the backend is queried.
+            How many seconds between when the backend is queried.
 
         Returns
         -------
@@ -88,40 +71,70 @@ class CodeOceanJob:
                 break_flag = True
         return response
 
-
     def run_capsule(
         self,
+        capsule_or_pipeline_id: str,
+        data_assets: Optional[Union[List[Dict], Tuple[Dict]]] = None,
+        run_parameters: Optional[List] = None,
+        pause_interval: Optional[int] = 300,
         capsule_version: Optional[int] = None,
-        pause_interval: Optional[int] = None,
         timeout_seconds: Optional[int] = None,
-    ):
+    ) -> requests.Response:
         """
         Run a specified capsule with the given data assets. If the
         pause_interval is set, the method will return until the capsule run is
         finished before returning a response. If pause_interval is set, then
         the timeout_seconds can also optionally be set to set a max wait time.
+
         Parameters
         ----------
         capsule_id : str
-          ID of the Code Ocean capsule to be run
+            ID of the Code Ocean capsule to be run
         data_assets : List[Dict]
-          List of data assets for the capsule to run against. The dict should
-          have the keys id and mount.
-        capsule_version : Optional[int]
-          Run a specific version of the capsule to be run
+            List of data assets for the capsule to run against. The dict should
+            have the keys id and mount.
+        run_parameters : Optional[List]
+            List of parameters to pass to the capsule.
         pause_interval : Optional[int]
-          How often to check if the capsule run is finished.
+            How often to check if the capsule run is finished.
+            If None, then the method will return immediately without waiting for
+            the computation to finish.
+        capsule_version : Optional[int]
+            Run a specific version of the capsule to be run
         timeout_seconds : Optional[int]
-          If pause_interval is set, the max wait time to check if the capsule
-          is finished.
+            If pause_interval is set, the max wait time to check if the capsule
+            is finished.
 
         Returns
         -------
+        requests.Response
 
         """
+        if data_assets is not None:
+            assert isinstance(
+                data_assets, (list, tuple)
+            ), "data_assets must be a list or tuple"
+            assert all(
+                [
+                    "id" in data_asset and "mount" in data_asset
+                    for data_asset in data_assets
+                ]
+            ), "data_assets must be a list of dicts with keys 'id' and 'mount'"
+            # check if data assets exist
+            for data_asset in data_assets:
+                data_asset_id = data_asset["id"]
+                response = self.co_client.get_data_asset(data_asset_id)
+                response_json = response.json()
+                if (
+                    "message" in response_json
+                    and "not found" in response_json["message"]
+                ):
+                    raise FileNotFoundError(f"Unable to find: {data_asset_id}")
         run_capsule_response = self.co_client.run_capsule(
-            capsule_id=self.capsule_or_pipeline_id, data_assets=self.data_assets, version=capsule_version,
-            parameters=self.run_parameters
+            capsule_id=capsule_or_pipeline_id,
+            data_assets=data_assets,
+            version=capsule_version,
+            parameters=run_parameters,
         )
         run_capsule_response_json = run_capsule_response.json()
         computation_id = run_capsule_response_json["id"]
@@ -143,111 +156,112 @@ class CodeOceanJob:
                     executing = False
         return run_capsule_response
 
-    # TODO or move this elsewhere
-    # def register_data(
-    #     self,
-    #     asset_name: str,
-    #     mount: str,
-    #     bucket: str,
-    #     prefix: str,
-    #     access_key_id: Optional[str],
-    #     secret_access_key: Optional[str],
-    #     tags: List[str],
-    #     custom_metadata: Optional[dict] = None,
-    #     viewable_to_everyone=False,
-    # ):
-    #     """
-    #     Register a data asset. Can also optionally update the permissions on
-    #     the data asset.
-    #     Parameters
-    #     ----------
-    #     asset_name : str
-    #       The name to give the data asset
-    #     mount : str
-    #       The mount folder name
-    #     bucket : str
-    #       The s3 bucket the data asset is located.
-    #     prefix : str
-    #       The s3 prefix where the data asset is located.
-    #     access_key_id : Optional[str]
-    #       The aws access key to access the bucket/prefix
-    #     secret_access_key : Optional[str]
-    #       The aws secret access key to access the bucket/prefix
-    #     tags : List[str]
-    #       The tags to use to describe the data asset
-    #     custom_metadata : Optional[dict]
-    #         What key:value metadata tags to apply to the asset.
-    #     viewable_to_everyone : bool
-    #       If set to true, then the data asset will be shared with everyone.
-    #       Default is false.
-
-    #     Returns
-    #     -------
-    #     requests.Response
-
-    #     """
-    #     data_asset_reg_response = self.co_client.register_data_asset(
-    #         asset_name=asset_name,
-    #         mount=mount,
-    #         bucket=bucket,
-    #         prefix=prefix,
-    #         access_key_id=access_key_id,
-    #         secret_access_key=secret_access_key,
-    #         tags=tags,
-    #         custom_metadata=custom_metadata,
-    #     )
-
-    #     if viewable_to_everyone:
-    #         response_contents = data_asset_reg_response.json()
-    #         data_asset_id = response_contents["id"]
-    #         response_data_available = self.wait_for_data_availability(data_asset_id)
-
-    #         if response_data_available.status_code != 200:
-    #             raise FileNotFoundError(f"Unable to find: {data_asset_id}")
-
-    #         # Make data asset viewable to everyone
-    #         update_data_perm_response = self.co_client.update_permissions(
-    #             data_asset_id=data_asset_id, everyone="viewer"
-    #         )
-    #         logger.info(
-    #             f"Permissions response: {update_data_perm_response.status_code}"
-    #         )
-
-    #     return data_asset_reg_response
-
-    def capture_result(
+    def register_data_and_update_permissions(
         self,
-        computation_id: str,
         asset_name: str,
         mount: str,
-        tags: List[str],
-        custom_metadata: Optional[dict] = None,
-        viewable_to_everyone: bool = False,
-    ):
+        bucket: str,
+        prefix: str,
+        access_key_id: Optional[str] = None,
+        secret_access_key: Optional[str] = None,
+        tags: Optional[List[str]] = None,
+        custom_metadata: Optional[Dict] = None,
+        viewable_to_everyone=False,
+    ) -> requests.Response:
         """
-        Capture a result as a data asset. Can also share it with everyone.
+        Register a data asset. Can also optionally update the permissions on
+        the data asset.
+
         Parameters
         ----------
-        computation_id : str
-          ID of the computation
         asset_name : str
-          Name to give the data asset
+            The name to give the data asset
         mount : str
-          Mount folder name for the data asset.
+            The mount folder name
+        bucket : str
+            The s3 bucket the data asset is located.
+        prefix : str
+            The s3 prefix where the data asset is located.
+        access_key_id : Optional[str]
+            The aws access key to access the bucket/prefix
+        secret_access_key : Optional[str]
+            The aws secret access key to access the bucket/prefix
         tags : List[str]
-          List of tags to describe the data asset.
+            The tags to use to describe the data asset
         custom_metadata : Optional[dict]
             What key:value metadata tags to apply to the asset.
         viewable_to_everyone : bool
-          If set to true, then the data asset will be shared with everyone.
-          Default is false.
+            If set to true, then the data asset will be shared with everyone.
+            Default is false.
 
         Returns
         -------
         requests.Response
 
         """
-        print(asset_name)
+        data_asset_reg_response = self.co_client.register_data_asset(
+            asset_name=asset_name,
+            mount=mount,
+            bucket=bucket,
+            prefix=prefix,
+            access_key_id=access_key_id,
+            secret_access_key=secret_access_key,
+            tags=tags,
+            custom_metadata=custom_metadata,
+        )
+
+        if viewable_to_everyone:
+            response_contents = data_asset_reg_response.json()
+            data_asset_id = response_contents["id"]
+            response_data_available = self.wait_for_data_availability(
+                data_asset_id
+            )
+
+            if response_data_available.status_code != 200:
+                raise FileNotFoundError(f"Unable to find: {data_asset_id}")
+
+            # Make data asset viewable to everyone
+            update_data_perm_response = self.co_client.update_permissions(
+                data_asset_id=data_asset_id, everyone="viewer"
+            )
+            logger.info(
+                f"Permissions response: {update_data_perm_response.status_code}"
+            )
+
+        return data_asset_reg_response
+
+    def capture_result(
+        self,
+        computation_id: str,
+        asset_name: str,
+        mount: str,
+        tags: Optional[List[str]] = None,
+        custom_metadata: Optional[Dict] = None,
+        viewable_to_everyone: bool = False,
+    ) -> requests.Response:
+        """
+        Capture a result as a data asset. Can also share it with everyone.
+        Parameters
+        ----------
+        computation_id : str
+            ID of the computation
+        asset_name : str
+            Name to give the data asset
+        mount : str
+            Mount folder name for the data asset.
+        tags : List[str]
+            List of tags to describe the data asset.
+        custom_metadata : Optional[dict]
+            What key:value metadata tags to apply to the asset.
+        viewable_to_everyone : bool
+            If set to true, then the data asset will be shared with everyone.
+            Default is false.
+
+        Returns
+        -------
+        requests.Response
+
+        """
         reg_result_response = self.co_client.register_result_as_data_asset(
             computation_id=computation_id,
             asset_name=asset_name,
@@ -279,49 +293,132 @@ class CodeOceanJob:
             update_res_perm_response = self.co_client.update_permissions(
                 data_asset_id=results_data_asset_id, everyone="viewer"
             )
-            print(f"Updating permissions {update_res_perm_response.status_code}")
+            logger.info(
+                f"Updating permissions {update_res_perm_response.status_code}"
+            )
         return reg_result_response
 
-    def run_job(
+    def process_data(
         self,
-        pause_interval: int = 300,
-        run_capsule_config : dict = {},
-        capture_results : bool = True,
-        capture_result_config : dict = {},
-        capture_results_asset_name : Optional[str] = None,
-        capture_results_mount : Optional[str] = None,
-    ):
+        capsule_or_pipeline_id: str,
+        data_assets: Optional[Union[List[Dict], Tuple[Dict]]] = None,
+        run_capsule_config: dict = {},
+        capture_results: bool = True,
+        capture_result_config: dict = {},
+    ) -> dict:
         """
         Method to run the pipeline job
         """
-        # 1. check data assets exist!
-        for data_asset in self.data_assets:
-            data_asset_id = data_asset["id"]
-            response = self.co_client.get_data_asset(data_asset_id)
-            response_json = response.json()
-            if "message" in response_json and "not found" in response_json["message"]:
-                raise FileNotFoundError(f"Unable to find: {data_asset_id}")
-
-
-        # 2. run capsule
-        if "pause_interval" not in run_capsule_config:
-            run_capsule_config["pause_interval"] = pause_interval
+        # 1. run capsule
+        if "capsule_or_pipeline_id" not in run_capsule_config:
+            run_capsule_config[
+                "capsule_or_pipeline_id"
+            ] = capsule_or_pipeline_id
+        if "data_assets" not in run_capsule_config:
+            run_capsule_config["data_assets"] = data_assets
+        else:
+            assert isinstance(
+                data_assets, (list, tuple)
+            ), "data_assets must be a list or tuple"
+            run_capsule_config["data_assets"].extend(data_assets)
         run_capsule_response = self.run_capsule(**run_capsule_config)
         computation_id = run_capsule_response.json()["id"]
 
-        # 3. capture results
+        # 2. capture results
         if capture_results:
-            assert capture_results_asset_name is not None
-            assert capture_results_mount is not None
-            if "asset_name" not in capture_result_config:
-                capture_result_config["asset_name"] = capture_results_asset_name
-            if "mount" not in capture_result_config:
-                capture_result_config["mount"] = capture_results_mount
-            assert "computation_id" not in capture_result_config
+            assert (
+                "asset_name" in capture_result_config
+            ), "asset_name must be provided"
+            assert "mount" in capture_result_config, "mount must be provided"
+            assert (
+                "computation_id" not in capture_result_config
+            ), "computation_id must not be provided"
             capture_result_config["computation_id"] = computation_id
-            capture_results_response = self.capture_result(**capture_result_config)
+            capture_results_response = self.capture_result(
+                **capture_result_config
+            )
         else:
             capture_results_response = None
-        return run_capsule_response, capture_results_response
+        return dict(run=run_capsule_response, capture=capture_results_response)
 
-            
+    def register_and_process_data(
+        self,
+        capsule_or_pipeline_id: str,
+        register_data_config: dict = {},
+        run_capsule_config: dict = {},
+        additional_data_assets: Optional[List[Dict]] = None,
+        capture_results: bool = True,
+        capture_result_config: dict = {},
+    ) -> dict:
+        """
+        Method to register and process data with a Code Ocean capsule/pipeline.
+
+        Parameters
+        ----------
+        capsule_or_pipeline_id : str
+            ID of the capsule or pipeline to run.
+        register_data_config : dict
+            Configuration parameters for registering data assets.
+            Required keys:
+                * asset_name
+                * mount
+                * bucket
+                * prefix
+                * access_key_id
+                * secret_access_key
+            Optional keys:
+                * tags
+                * custom_metadata
+        run_capsule_config : dict
+            Configuration parameters for running a capsule.
+            Optional keys:
+                * run_parameters
+                * pause_interval (default 300)
+                * capsule_version
+                * timeout_seconds
+        additional_data_assets : Optional[List[Dict]]
+            Additional data assets to attach to the capsule run.
+        capture_results : bool
+            Whether to capture the results of the capsule run, default is True.
+        capture_result_config : dict
+            Configuration parameters for capturing results.
+            Required keys (if capture_results is True):
+                * asset_name
+                * mount
+            Optional keys:
+                * viewable_to_everyone (default False)
+                * custom_metadata
+                * tags
+
+        Returns
+        -------
+        dict
+            Dictionary with keys register, run, and capture. The values are the responses
+            from the register, run, and capture requests.
+
+        """
+        # 1. register data assets
+        data_asset_reg_response = self.register_data_and_update_permissions(
+            **register_data_config
+        )
+
+        # 2. create data assets
+        data_assets = [
+            dict(
+                id=data_asset_reg_response.json()["id"],
+                mount=register_data_config["mount"],
+            )
+        ]
+        if additional_data_assets is not None:
+            data_assets.extend(additional_data_assets)
+
+        # 3. process data
+        responses = self.process_data(
+            capsule_or_pipeline_id=capsule_or_pipeline_id,
+            data_assets=data_assets,
+            run_capsule_config=run_capsule_config,
+            capture_results=capture_results,
+            capture_result_config=capture_result_config,
+        )
+        responses.update(dict(register=data_asset_reg_response))
+        return responses
