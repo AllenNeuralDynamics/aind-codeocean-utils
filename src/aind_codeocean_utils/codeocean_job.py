@@ -1,6 +1,7 @@
 """Module with generic Code Ocean job"""
 import logging
 import time
+from datetime import datetime
 from typing import Dict, List, Optional, Tuple, Union
 
 import requests
@@ -20,6 +21,8 @@ class CodeOceanJob:
     run capsules, and capture results.
     """
 
+    default_datetime_format = "%Y-%m-%d_%H-%M-%S"
+
     def __init__(self, co_client: CodeOceanClient):
         """
         CapsuleJob class constructor.
@@ -30,6 +33,22 @@ class CodeOceanJob:
             A client that can be used to interface with the Code Ocean API.
         """
         self.co_client = co_client
+
+    def add_capture_time(self, name: str) -> str:
+        if "{capture_time}" not in name:
+            return name
+        name_stem = name[: name.find("{capture_time}")]
+        capture_string = name[name.find("{capture_time}"):]
+        if ":" in capture_string:
+            date_time_format = capture_string[
+                capture_string.find(":") + 1: -1
+            ]
+        else:
+            date_time_format = self.default_datetime_format
+        capture_time = datetime.now()
+        name_capture_time = name_stem + \
+                f"_{datetime.strftime(capture_time, date_time_format)}"
+        return name_capture_time
 
     def wait_for_data_availability(
         self,
@@ -248,9 +267,17 @@ class CodeOceanJob:
         computation_id : str
             ID of the computation
         asset_name : str
-            Name to give the data asset
+            Name to give the data asset. If the name contains the string
+            {capture_time}, then the current time will be appended to the
+            name using the default format: "%Y-%m-%d_%H-%M-%S"
+            To use a different format, use: {capture_time:date_time_format},
+            e.g. {capture_time:%Y-%m-%d}
         mount : str
-            Mount folder name for the data asset.
+            Mount folder name for the data asset. If the name contains the
+            string {capture_time}, then the current time will be appended to
+            the name using the default format: "%Y-%m-%d_%H-%M-%S"
+            To use a different format, use: {capture_time:date_time_format},
+            e.g. {capture_time:%Y-%m-%d}
         tags : List[str]
             List of tags to describe the data asset.
         custom_metadata : Optional[dict]
@@ -264,6 +291,10 @@ class CodeOceanJob:
         requests.Response
 
         """
+        # handle capture time
+        asset_name = self.add_capture_time(asset_name)
+        mount = self.add_capture_time(mount)
+
         reg_result_response = self.co_client.register_result_as_data_asset(
             computation_id=computation_id,
             asset_name=asset_name,
@@ -300,7 +331,7 @@ class CodeOceanJob:
             )
         return reg_result_response
 
-    def process_data(
+    def run(
         self,
         capsule_or_pipeline_id: str,
         data_assets: Optional[Union[List[Dict], Tuple[Dict]]] = None,
@@ -309,7 +340,50 @@ class CodeOceanJob:
         capture_result_config: dict = {},
     ) -> dict:
         """
-        Method to run the pipeline job
+        Method to run a computation and optionally capture the results.
+
+        Parameters
+        ----------
+        capsule_or_pipeline_id : str
+            ID of the capsule or pipeline to run.
+        data_assets : Optional[Union[List[Dict], Tuple[Dict]]]
+            List of data assets for the capsule to run against. The dict
+            should have the keys id and mount.
+        run_capsule_config : dict
+            Configuration parameters for running a capsule.
+            Optional keys:
+                * run_parameters: List[str]
+                    The parameters to pass to the capsule.
+                * pause_interval: int
+                    How often to check if the capsule run is finished.
+                    Default is 300 seconds.
+                * capsule_version: int
+                    Run a specific version of the capsule to be run.
+                    Default is None.
+                * timeout_seconds:
+                    If pause_interval is set, the max wait time to check if
+                    the capsule is finished. Default is None.
+        capture_results : bool
+            Whether to capture the results of the capsule run,
+            default is True.
+        capture_result_config : dict
+            Configuration parameters for capturing results.
+            Required keys (if capture_results is True):
+                * asset_name: str
+                    To add the current time to the asset name, use the
+                    magic string: {capture_time} notation. The default
+                    datetime format is: "%Y-%m-%d_%H-%M-%S". To use a
+                    different format, use: {capture_time:date_time_format}.
+                * mount: str
+                    The mount folder name.
+            Optional keys:
+                * viewable_to_everyone: bool
+                    Whether to share the captured results with everyone.
+                    Default is False.
+                * custom_metadata: dict
+                    What key:value metadata tags to apply to the asset.
+                * tags: List[str]
+                    The tags to use to describe the data asset.
         """
         # 1. run capsule
         if "capsule_or_pipeline_id" not in run_capsule_config:
@@ -343,7 +417,7 @@ class CodeOceanJob:
             capture_results_response = None
         return dict(run=run_capsule_response, capture=capture_results_response)
 
-    def register_and_process_data(
+    def register_and_run(
         self,
         capsule_or_pipeline_id: str,
         register_data_config: dict = {},
@@ -362,35 +436,58 @@ class CodeOceanJob:
         register_data_config : dict
             Configuration parameters for registering data assets.
             Required keys:
-                * asset_name
-                * mount
-                * bucket
-                * prefix
-                * access_key_id
-                * secret_access_key
+                * asset_name: str
+                    The name to give the data asset.
+                * mount: str
+                    The mount folder name.
+                * bucket: str
+                    The s3 bucket the data asset is located.
+                * prefix: str
+                    The s3 prefix where the data asset is located.
+                * access_key_id: str
+                    The aws access key to access the bucket/prefix.
+                * secret_access_key: str
+                    The aws secret access key to access the bucket/prefix.
             Optional keys:
                 * tags
                 * custom_metadata
         run_capsule_config : dict
             Configuration parameters for running a capsule.
             Optional keys:
-                * run_parameters
-                * pause_interval (default 300)
-                * capsule_version
-                * timeout_seconds
+                * run_parameters: List[str]
+                    The parameters to pass to the capsule.
+                * pause_interval: int
+                    How often to check if the capsule run is finished.
+                    Default is 300 seconds.
+                * capsule_version: int
+                    Run a specific version of the capsule to be run.
+                    Default is None.
+                * timeout_seconds:
+                    If pause_interval is set, the max wait time to check if
+                    the capsule is finished. Default is None.
         additional_data_assets : Optional[List[Dict]]
             Additional data assets to attach to the capsule run.
         capture_results : bool
-            Whether to capture the results of the capsule run, default is True.
+            Whether to capture the results of the capsule run,
+            default is True.
         capture_result_config : dict
             Configuration parameters for capturing results.
             Required keys (if capture_results is True):
-                * asset_name
-                * mount
+                * asset_name: str
+                    To add the current time to the asset name, use the
+                    magic string: {capture_time} notation. The default
+                    datetime format is: "%Y-%m-%d_%H-%M-%S". To use a
+                    different format, use: {capture_time:date_time_format}.
+                * mount: str
+                    The mount folder name.
             Optional keys:
-                * viewable_to_everyone (default False)
-                * custom_metadata
-                * tags
+                * viewable_to_everyone: bool
+                    Whether to share the captured results with everyone.
+                    Default is False.
+                * custom_metadata: dict
+                    What key:value metadata tags to apply to the asset.
+                * tags: List[str]
+                    The tags to use to describe the data asset.
 
         Returns
         -------
@@ -416,7 +513,7 @@ class CodeOceanJob:
             data_assets.extend(additional_data_assets)
 
         # 3. process data
-        responses = self.process_data(
+        responses = self.run(
             capsule_or_pipeline_id=capsule_or_pipeline_id,
             data_assets=data_assets,
             run_capsule_config=run_capsule_config,
