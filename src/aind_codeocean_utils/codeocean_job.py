@@ -6,6 +6,12 @@ from typing import Dict, List, Optional, Tuple, Union
 
 import requests
 from aind_codeocean_api.codeocean import CodeOceanClient
+from aind_codeocean_api.models.computations_requests import RunCapsuleRequest
+from aind_codeocean_api.models.data_assets_requests import (
+    CreateDataAssetRequest,
+    Source,
+    Sources,
+)
 
 LOG_FMT = "%(asctime)s %(message)s"
 LOG_DATE_FMT = "%Y-%m-%d %H:%M"
@@ -35,6 +41,13 @@ class CodeOceanJob:
         self.co_client = co_client
 
     def add_capture_time(self, name: str) -> str:
+        """
+        Add capture time to a name. If the name contains the string
+        {capture_time}, then the current time will be appended to the
+        name using the default format: "%Y-%m-%d_%H-%M-%S".
+        To use a different format, use:
+        {capture_time:date_time_format}, e.g. {capture_time:%Y-%m-%d}
+        """
         if "{capture_time}" not in name:
             return name
         name_stem = name[: name.find("{capture_time}")]
@@ -46,8 +59,9 @@ class CodeOceanJob:
         else:
             date_time_format = self.default_datetime_format
         capture_time = datetime.now()
-        name_capture_time = name_stem + \
-                f"_{datetime.strftime(capture_time, date_time_format)}"
+        name_capture_time = (
+            name_stem + f"_{datetime.strftime(capture_time, date_time_format)}"
+        )
         return name_capture_time
 
     def wait_for_data_availability(
@@ -150,12 +164,14 @@ class CodeOceanJob:
                     and "not found" in response_json["message"]
                 ):
                     raise FileNotFoundError(f"Unable to find: {data_asset_id}")
-        run_capsule_response = self.co_client.run_capsule(
+
+        run_capsule_request = RunCapsuleRequest(
             capsule_id=capsule_or_pipeline_id,
             data_assets=data_assets,
-            version=capsule_version,
             parameters=run_parameters,
+            version=capsule_version,
         )
+        run_capsule_response = self.co_client.run_capsule(run_capsule_request)
         run_capsule_response_json = run_capsule_response.json()
         computation_id = run_capsule_response_json["id"]
 
@@ -182,8 +198,8 @@ class CodeOceanJob:
         mount: str,
         bucket: str,
         prefix: str,
-        access_key_id: Optional[str] = None,
-        secret_access_key: Optional[str] = None,
+        public: bool = False,
+        keep_on_external_storage: bool = True,
         tags: Optional[List[str]] = None,
         custom_metadata: Optional[Dict] = None,
         viewable_to_everyone=False,
@@ -202,10 +218,11 @@ class CodeOceanJob:
             The s3 bucket the data asset is located.
         prefix : str
             The s3 prefix where the data asset is located.
-        access_key_id : Optional[str]
-            The aws access key to access the bucket/prefix
-        secret_access_key : Optional[str]
-            The aws secret access key to access the bucket/prefix
+        public : bool
+            Whether the data asset is public or not. Default is False.
+        keep_on_external_storage : bool
+            Whether to keep the data asset on external storage.
+            Default is True.
         tags : List[str]
             The tags to use to describe the data asset
         custom_metadata : Optional[dict]
@@ -214,20 +231,30 @@ class CodeOceanJob:
             If set to true, then the data asset will be shared with everyone.
             Default is false.
 
+        Notes
+        -----
+        The credentials for the s3 bucket must be set in the environment.
+
         Returns
         -------
         requests.Response
-
         """
-        data_asset_reg_response = self.co_client.register_data_asset(
-            asset_name=asset_name,
-            mount=mount,
+        aws_source = Sources.AWS(
             bucket=bucket,
             prefix=prefix,
-            access_key_id=access_key_id,
-            secret_access_key=secret_access_key,
-            tags=tags,
+            keep_on_external_storage=keep_on_external_storage,
+            public=public,
+        )
+        source = Source(aws=aws_source)
+        create_data_asset_request = CreateDataAssetRequest(
+            name=asset_name,
+            tags=tags if tags is not None else [],
+            mount=mount,
+            source=source,
             custom_metadata=custom_metadata,
+        )
+        data_asset_reg_response = self.co_client.create_data_asset(
+            create_data_asset_request
         )
 
         if viewable_to_everyone:
@@ -295,12 +322,20 @@ class CodeOceanJob:
         asset_name = self.add_capture_time(asset_name)
         mount = self.add_capture_time(mount)
 
-        reg_result_response = self.co_client.register_result_as_data_asset(
-            computation_id=computation_id,
-            asset_name=asset_name,
-            mount=mount,
+        computation_source = Sources.Computation(
+            id=computation_id,
+        )
+        source = Source(computation=computation_source)
+        create_data_asset_request = CreateDataAssetRequest(
+            name=asset_name,
             tags=tags,
+            mount=mount,
+            source=source,
             custom_metadata=custom_metadata,
+        )
+
+        reg_result_response = self.co_client.create_data_asset(
+            create_data_asset_request
         )
         registered_results_response_json = reg_result_response.json()
 
@@ -397,6 +432,7 @@ class CodeOceanJob:
                 data_assets, (list, tuple)
             ), "data_assets must be a list or tuple"
             run_capsule_config["data_assets"].extend(data_assets)
+
         run_capsule_response = self.run_capsule(**run_capsule_config)
         computation_id = run_capsule_response.json()["id"]
 
