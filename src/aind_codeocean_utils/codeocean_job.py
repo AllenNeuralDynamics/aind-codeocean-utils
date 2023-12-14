@@ -107,7 +107,8 @@ class CodeOceanJob:
 
     def run_capsule(
         self,
-        capsule_or_pipeline_id: str,
+        capsule_id: Optional[str] = None,
+        pipeline_id: Optional[str] = None,
         data_assets: Optional[Union[List[Dict], Tuple[Dict]]] = None,
         run_parameters: Optional[List] = None,
         pause_interval: Optional[int] = 300,
@@ -124,6 +125,8 @@ class CodeOceanJob:
         ----------
         capsule_id : str
             ID of the Code Ocean capsule to be run
+        pipeline_id : str
+            ID of the Code Ocean pipeline to be run
         data_assets : List[Dict]
             List of data assets for the capsule to run against. The dict
             should have the keys id and mount.
@@ -166,7 +169,8 @@ class CodeOceanJob:
                     raise FileNotFoundError(f"Unable to find: {data_asset_id}")
 
         run_capsule_request = RunCapsuleRequest(
-            capsule_id=capsule_or_pipeline_id,
+            capsule_id=capsule_id,
+            pipeline_id=pipeline_id,
             data_assets=data_assets,
             parameters=run_parameters,
             version=capsule_version,
@@ -368,7 +372,8 @@ class CodeOceanJob:
 
     def run(
         self,
-        capsule_or_pipeline_id: str,
+        capsule_id: Optional[str] = None,
+        pipeline_id: Optional[str] = None,
         data_assets: Optional[Union[List[Dict], Tuple[Dict]]] = None,
         run_capsule_config: dict = {},
         capture_results: bool = True,
@@ -379,8 +384,10 @@ class CodeOceanJob:
 
         Parameters
         ----------
-        capsule_or_pipeline_id : str
-            ID of the capsule or pipeline to run.
+        capsule_id : str or None
+            ID of the capsule to run.
+        pipeline_id : str or None
+            ID of the pipeline to run.
         data_assets : Optional[Union[List[Dict], Tuple[Dict]]]
             List of data assets for the capsule to run against. The dict
             should have the keys id and mount.
@@ -421,10 +428,21 @@ class CodeOceanJob:
                     The tags to use to describe the data asset.
         """
         # 1. run capsule
-        if "capsule_or_pipeline_id" not in run_capsule_config:
-            run_capsule_config[
-                "capsule_or_pipeline_id"
-            ] = capsule_or_pipeline_id
+        assert (
+            capsule_id is not None or pipeline_id is not None
+        ), "Either capsule_id or pipeline_id must be provided"
+        if capsule_id is not None:
+            assert (
+                pipeline_id is None
+            ), "If capsule_id is provided, then pipeline_id must be None"
+            if "capsule_id" not in run_capsule_config:
+                run_capsule_config["capsule_id"] = capsule_id
+        if pipeline_id is not None:
+            assert (
+                capsule_id is None
+            ), "If pipeline_id is provided, then capsule_id must be None"
+            if "pipeline_id" not in run_capsule_config:
+                run_capsule_config["pipeline_id"] = pipeline_id
         if "data_assets" not in run_capsule_config:
             run_capsule_config["data_assets"] = data_assets
         else:
@@ -455,7 +473,8 @@ class CodeOceanJob:
 
     def register_and_run(
         self,
-        capsule_or_pipeline_id: str,
+        capsule_id: Optional[str] = None,
+        pipeline_id: Optional[str] = None,
         register_data_config: dict = {},
         run_capsule_config: dict = {},
         additional_data_assets: Optional[List[Dict]] = None,
@@ -467,8 +486,10 @@ class CodeOceanJob:
 
         Parameters
         ----------
-        capsule_or_pipeline_id : str
+        capsule_id : str or None
             ID of the capsule or pipeline to run.
+        pipeline_id : str or None
+            ID of the pipeline to run.
         register_data_config : dict
             Configuration parameters for registering data assets.
             Required keys:
@@ -550,7 +571,8 @@ class CodeOceanJob:
 
         # 3. process data
         responses = self.run(
-            capsule_or_pipeline_id=capsule_or_pipeline_id,
+            capsule_id=capsule_id,
+            pipeline_id=pipeline_id,
             data_assets=data_assets,
             run_capsule_config=run_capsule_config,
             capture_results=capture_results,
