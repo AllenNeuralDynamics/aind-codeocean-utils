@@ -60,7 +60,7 @@ class CodeOceanJob:
             date_time_format = self.default_datetime_format
         capture_time = datetime.now()
         name_capture_time = (
-            name_stem + f"_{datetime.strftime(capture_time, date_time_format)}"
+            name_stem + f"{datetime.strftime(capture_time, date_time_format)}"
         )
         return name_capture_time
 
