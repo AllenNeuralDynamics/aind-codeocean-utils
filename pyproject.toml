@@ -17,7 +17,7 @@ readme = "README.md"
 dynamic = ["version"]
 
 dependencies = [
-    "aind-codeocean-api==0.2.5"
+    "aind-codeocean-api==0.3.0"
 ]
 
 [project.optional-dependencies]
