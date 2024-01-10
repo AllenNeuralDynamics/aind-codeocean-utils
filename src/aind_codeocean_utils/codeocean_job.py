@@ -1,8 +1,9 @@
 """Module with generic Code Ocean job"""
 import logging
 import time
+from copy import deepcopy
 from datetime import datetime
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Optional, Union
 
 import requests
 from aind_codeocean_api.codeocean import CodeOceanClient
@@ -12,13 +13,16 @@ from aind_codeocean_api.models.data_assets_requests import (
     Source,
     Sources,
 )
+from aind_data_schema.core.data_description import DataLevel, datetime_to_name_string
 
-LOG_FMT = "%(asctime)s %(message)s"
-LOG_DATE_FMT = "%Y-%m-%d %H:%M"
+from aind_codeocean_utils.models import (
+    CodeOceanJobConfig,
+    RegisterDataConfig,
+    RunCapsuleConfig,
+    CaptureResultConfig
+)
 
-logging.basicConfig(format=LOG_FMT, datefmt=LOG_DATE_FMT)
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
 
 
 class CodeOceanJob:
@@ -26,10 +30,7 @@ class CodeOceanJob:
     This class contains convenient methods to register data assets,
     run capsules, and capture results.
     """
-
-    default_datetime_format = "%Y-%m-%d_%H-%M-%S"
-
-    def __init__(self, co_client: CodeOceanClient):
+    def __init__(self, co_client: CodeOceanClient, job_config: Union[dict, CodeOceanJobConfig]):
         """
         CapsuleJob class constructor.
 
@@ -37,34 +38,75 @@ class CodeOceanJob:
         ----------
         co_client : CodeOceanClient
             A client that can be used to interface with the Code Ocean API.
+        job_config : Union[dict, CodeOceanJobConfig]
+            Configuration parameters for the job.
+
+            * register_config : optional
+                Configuration parameters for registering data assets, including:
+
+                * asset_name : str
+                    The name to give the data asset
+                * mount : str
+                    The mount folder name
+                * bucket : str
+                    The s3 bucket the data asset is located.
+                * prefix : str
+                    The s3 prefix where the data asset is located.
+                * public : bool
+                    Whether the bucket is public or not. Default is False.
+
+            * run_capsule_config : required
+                Configuration parameters for running a capsule, including:
+
+                * capsule_id : str or None
+                    ID of the capsule or pipeline to run.
+                * pipeline_id : str or None
+                    ID of the pipeline to run.
+                * data_assets : List[Dict]
+                    List of data assets for the capsule to run against. Each entry dict
+                    should have the 'keys' id and 'mount'.
+                * run_parameters : Optional[List]
+                    List of parameters to pass to the capsule.
+                * pause_interval : Optional[int]
+                    How often to check if the capsule run is finished.
+                    If None, then the method will return immediately without waiting
+                    for the computation to finish.
+                * capsule_version : Optional[int]
+                    Run a specific version of the capsule to be run
+                    Default is None.
+                * timeout_seconds : Optional[int]
+                    If pause_interval is set, the max wait time to check if the
+                    capsule is finished.
+
+            * capture_result_config : optional
+                Configuration parameters for capturing results, including:
+
+                * process_name : Optional[str]
+                    Name of the process. When it is provided and asset_name is None,
+                    the output data asset name will be: {input_data_asset_name}_{process_name}_{capture_time}.
+                    Note that if multiple input data assets are provided, then the asset_name will be required.
+                * mount : Optional[str]
+                    The mount folder name. If None, then the mount folder name will be the same as the asset_name.
+                * asset_name : Optional[str]
+                    The name to give the data asset. If multiple input data assets are provided,
+                    then this must be provided.
+                * tags : Optional[List[str]]
+                    The tags to add to describe the output data asset in addition to the input data asset tags.
+                    In case multiple input data assets are provided, the input data tags are not propagated to the 
+                    output data asset.
+                * custom_metadata : Optional[dict]
+                    What key:value metadata tags to add to the output data asset in addition to the input data asset
+                    custom_metadata. In case multiple input data assets are provided, the input data custom_metadata
+                    is not propagated to the output data asset.
+                * viewable_to_everyone : bool
+                    Whether to share the captured results with everyone.
         """
         self.co_client = co_client
+        if isinstance(job_config, dict):
+            job_config = CodeOceanJobConfig(**job_config)
+        self.job_config = job_config
 
-    def add_capture_time(self, name: str) -> str:
-        """
-        Add capture time to a name. If the name contains the string
-        {capture_time}, then the current time will be appended to the
-        name using the default format: "%Y-%m-%d_%H-%M-%S".
-        To use a different format, use:
-        {capture_time:date_time_format}, e.g. {capture_time:%Y-%m-%d}
-        """
-        if "{capture_time}" not in name:
-            return name
-        name_stem = name[: name.find("{capture_time}")]
-        capture_string = name[name.find("{capture_time}"):]
-        if ":" in capture_string:
-            date_time_format = capture_string[
-                capture_string.find(":") + 1: -1
-            ]
-        else:
-            date_time_format = self.default_datetime_format
-        capture_time = datetime.now()
-        name_capture_time = (
-            name_stem + f"_{datetime.strftime(capture_time, date_time_format)}"
-        )
-        return name_capture_time
-
-    def wait_for_data_availability(
+    def _wait_for_data_availability(
         self,
         data_asset_id: str,
         timeout_seconds: int = 300,
@@ -105,15 +147,9 @@ class CodeOceanJob:
                 break_flag = True
         return response
 
-    def run_capsule(
+    def _run_capsule(
         self,
-        capsule_id: Optional[str] = None,
-        pipeline_id: Optional[str] = None,
-        data_assets: Optional[Union[List[Dict], Tuple[Dict]]] = None,
-        run_parameters: Optional[List] = None,
-        pause_interval: Optional[int] = 300,
-        capsule_version: Optional[int] = None,
-        timeout_seconds: Optional[int] = None,
+        run_capsule_config: RunCapsuleConfig
     ) -> requests.Response:
         """
         Run a specified capsule with the given data assets. If the
@@ -123,42 +159,36 @@ class CodeOceanJob:
 
         Parameters
         ----------
-        capsule_id : str
-            ID of the Code Ocean capsule to be run
-        pipeline_id : str
-            ID of the Code Ocean pipeline to be run
-        data_assets : List[Dict]
-            List of data assets for the capsule to run against. The dict
-            should have the keys id and mount.
-        run_parameters : Optional[List]
-            List of parameters to pass to the capsule.
-        pause_interval : Optional[int]
-            How often to check if the capsule run is finished.
-            If None, then the method will return immediately without waiting
-            for the computation to finish.
-        capsule_version : Optional[int]
-            Run a specific version of the capsule to be run
-        timeout_seconds : Optional[int]
-            If pause_interval is set, the max wait time to check if the
-            capsule is finished.
+        run_capsule_config : RunCapsuleConfig
+            The configuration for the capsule run, including:
+
+            * capsule_id: str
+                ID of the Code Ocean capsule to be run
+            * pipeline_id : str
+                ID of the Code Ocean pipeline to be run
+            * data_assets : List[Dict]
+                List of data assets for the capsule to run against. The dict
+                should have the keys id and mount.
+            * run_parameters : Optional[List]
+                List of parameters to pass to the capsule.
+            pause_interval : Optional[int]
+                How often to check if the capsule run is finished.
+                If None, then the method will return immediately without waiting
+                for the computation to finish.
+            capsule_version : Optional[int]
+                Run a specific version of the capsule to be run
+            timeout_seconds : Optional[int]
+                If pause_interval is set, the max wait time to check if the
+                capsule is finished.
 
         Returns
         -------
         requests.Response
 
         """
-        if data_assets is not None:
-            assert isinstance(
-                data_assets, (list, tuple)
-            ), "data_assets must be a list or tuple"
-            assert all(
-                [
-                    "id" in data_asset and "mount" in data_asset
-                    for data_asset in data_assets
-                ]
-            ), "data_assets must be a list of dicts with keys 'id' and 'mount'"
+        if run_capsule_config.data_assets is not None:
             # check if data assets exist
-            for data_asset in data_assets:
+            for data_asset in run_capsule_config.data_assets:
                 data_asset_id = data_asset["id"]
                 response = self.co_client.get_data_asset(data_asset_id)
                 response_json = response.json()
@@ -169,44 +199,36 @@ class CodeOceanJob:
                     raise FileNotFoundError(f"Unable to find: {data_asset_id}")
 
         run_capsule_request = RunCapsuleRequest(
-            capsule_id=capsule_id,
-            pipeline_id=pipeline_id,
-            data_assets=data_assets,
-            parameters=run_parameters,
-            version=capsule_version,
+            capsule_id=run_capsule_config.capsule_id,
+            pipeline_id=run_capsule_config.pipeline_id,
+            data_assets=run_capsule_config.data_assets,
+            parameters=run_capsule_config.run_parameters,
+            version=run_capsule_config.capsule_version,
         )
         run_capsule_response = self.co_client.run_capsule(run_capsule_request)
         run_capsule_response_json = run_capsule_response.json()
         computation_id = run_capsule_response_json["id"]
 
-        if pause_interval:
+        if run_capsule_config.pause_interval:
             executing = True
             num_checks = 0
             while executing:
                 num_checks += 1
-                time.sleep(pause_interval)
+                time.sleep(run_capsule_config.pause_interval)
                 curr_computation_state = self.co_client.get_computation(
                     computation_id
                 ).json()
 
                 if (curr_computation_state["state"] == "completed") or (
-                    (timeout_seconds is not None)
-                    and (pause_interval * num_checks >= timeout_seconds)
+                    (run_capsule_config.timeout_seconds is not None)
+                    and (run_capsule_config.pause_interval * num_checks >= run_capsule_config.timeout_seconds)
                 ):
                     executing = False
         return run_capsule_response
 
-    def register_data_and_update_permissions(
+    def _register_data_and_update_permissions(
         self,
-        asset_name: str,
-        mount: str,
-        bucket: str,
-        prefix: str,
-        public: bool = False,
-        keep_on_external_storage: bool = True,
-        tags: Optional[List[str]] = None,
-        custom_metadata: Optional[Dict] = None,
-        viewable_to_everyone=False,
+        register_data_config: RegisterDataConfig
     ) -> requests.Response:
         """
         Register a data asset. Can also optionally update the permissions on
@@ -214,26 +236,29 @@ class CodeOceanJob:
 
         Parameters
         ----------
-        asset_name : str
-            The name to give the data asset
-        mount : str
-            The mount folder name
-        bucket : str
-            The s3 bucket the data asset is located.
-        prefix : str
-            The s3 prefix where the data asset is located.
-        public : bool
-            Whether the data asset is public or not. Default is False.
-        keep_on_external_storage : bool
-            Whether to keep the data asset on external storage.
-            Default is True.
-        tags : List[str]
-            The tags to use to describe the data asset
-        custom_metadata : Optional[dict]
-            What key:value metadata tags to apply to the asset.
-        viewable_to_everyone : bool
-            If set to true, then the data asset will be shared with everyone.
-            Default is false.
+        register_data_config : RegisterDataConfig
+            The configuration for registering the data asset, including:
+ 
+            * asset_name : str
+                The name to give the data asset
+            * mount : str
+                The mount folder name
+            * bucket : str
+                The s3 bucket the data asset is located.
+            * prefix : str
+                The s3 prefix where the data asset is located.
+            * public : bool
+                Whether the data asset is public or not. Default is False.
+            * keep_on_external_storage : bool
+                Whether to keep the data asset on external storage.
+                Default is True.
+            * tags : List[str]
+                The tags to use to describe the data asset
+            * custom_metadata : Optional[dict]
+                What key:value metadata tags to apply to the asset.
+            * viewable_to_everyone : bool
+                If set to true, then the data asset will be shared with everyone.
+                Default is false.
 
         Notes
         -----
@@ -244,27 +269,27 @@ class CodeOceanJob:
         requests.Response
         """
         aws_source = Sources.AWS(
-            bucket=bucket,
-            prefix=prefix,
-            keep_on_external_storage=keep_on_external_storage,
-            public=public,
+            bucket=register_data_config.bucket,
+            prefix=register_data_config.prefix,
+            keep_on_external_storage=register_data_config.keep_on_external_storage,
+            public=register_data_config.public,
         )
         source = Source(aws=aws_source)
         create_data_asset_request = CreateDataAssetRequest(
-            name=asset_name,
-            tags=tags if tags is not None else [],
-            mount=mount,
+            name=register_data_config.asset_name,
+            tags=register_data_config.tags if register_data_config.tags is not None else [],
+            mount=register_data_config.mount,
             source=source,
-            custom_metadata=custom_metadata,
+            custom_metadata=register_data_config.custom_metadata,
         )
         data_asset_reg_response = self.co_client.create_data_asset(
             create_data_asset_request
         )
 
-        if viewable_to_everyone:
+        if register_data_config.viewable_to_everyone:
             response_contents = data_asset_reg_response.json()
             data_asset_id = response_contents["id"]
-            response_data_available = self.wait_for_data_availability(
+            response_data_available = self._wait_for_data_availability(
                 data_asset_id
             )
 
@@ -282,60 +307,60 @@ class CodeOceanJob:
 
         return data_asset_reg_response
 
-    def capture_result(
+    def _capture_result(
         self,
         computation_id: str,
-        asset_name: str,
-        mount: str,
-        tags: Optional[List[str]] = None,
-        custom_metadata: Optional[Dict] = None,
-        viewable_to_everyone: bool = False,
+        input_data_asset_name: Optional[str],
+        capture_result_config: CaptureResultConfig
     ) -> requests.Response:
         """
         Capture a result as a data asset. Can also share it with everyone.
+
         Parameters
         ----------
         computation_id : str
-            ID of the computation
-        asset_name : str
-            Name to give the data asset. If the name contains the string
-            {capture_time}, then the current time will be appended to the
-            name using the default format: "%Y-%m-%d_%H-%M-%S"
-            To use a different format, use: {capture_time:date_time_format},
-            e.g. {capture_time:%Y-%m-%d}
-        mount : str
-            Mount folder name for the data asset. If the name contains the
-            string {capture_time}, then the current time will be appended to
-            the name using the default format: "%Y-%m-%d_%H-%M-%S"
-            To use a different format, use: {capture_time:date_time_format},
-            e.g. {capture_time:%Y-%m-%d}
-        tags : List[str]
-            List of tags to describe the data asset.
-        custom_metadata : Optional[dict]
-            What key:value metadata tags to apply to the asset.
-        viewable_to_everyone : bool
-            If set to true, then the data asset will be shared with everyone.
-            Default is false.
+            ID of the computation to capture the result from.
+        input_data_asset_name : Optional[str]
+            Name of the input data asset to use to create the result name.
+        capture_result_config : CaptureResultConfig
+            The configuration for capturing the result, including:
+
+            * process_name : Optional[str]
+                Name of the process.
+            * mount : str
+                The mount folder name.
+            * asset_name : Optional[str]
+                The name to give the data asset.            
+            * tags : Optional[List[str]]
+                The tags to use to describe the data asset.
+            * custom_metadata : Optional[dict]
+                What key:value metadata tags to apply to the asset.
+            * viewable_to_everyone : bool
+                Whether to share the captured results with everyone.
 
         Returns
         -------
         requests.Response
 
         """
-        # handle capture time
-        asset_name = self.add_capture_time(asset_name)
-        mount = self.add_capture_time(mount)
+        if capture_result_config.asset_name is None:
+            assert input_data_asset_name is not None, "Either asset_name or input_data_asset_name must be provided"
+            capture_time = datetime_to_name_string(datetime.now())
+            capture_result_config.asset_name = f"{input_data_asset_name}_{capture_result_config.process_name}_{capture_time}"
+
+        if capture_result_config.mount is None:
+            capture_result_config.mount = capture_result_config.asset_name
 
         computation_source = Sources.Computation(
             id=computation_id,
         )
         source = Source(computation=computation_source)
         create_data_asset_request = CreateDataAssetRequest(
-            name=asset_name,
-            tags=tags,
-            mount=mount,
+            name=capture_result_config.asset_name,
+            tags=capture_result_config.tags,
+            mount=capture_result_config.mount,
             source=source,
-            custom_metadata=custom_metadata,
+            custom_metadata=capture_result_config.custom_metadata,
         )
 
         reg_result_response = self.co_client.create_data_asset(
@@ -347,13 +372,13 @@ class CodeOceanJob:
         #  figure out why.
         if registered_results_response_json.get("id") is None:
             raise KeyError(
-                f"Something went wrong registering {asset_name}. "
+                f"Something went wrong registering {capture_result_config.asset_name}. "
                 f"Response Status Code: {reg_result_response.status_code}. "
                 f"Response Message: {registered_results_response_json}"
             )
 
         results_data_asset_id = registered_results_response_json["id"]
-        response_res_available = self.wait_for_data_availability(
+        response_res_available = self._wait_for_data_availability(
             data_asset_id=results_data_asset_id
         )
 
@@ -361,7 +386,7 @@ class CodeOceanJob:
             raise FileNotFoundError(f"Unable to find: {results_data_asset_id}")
 
         # Make captured results viewable to everyone
-        if viewable_to_everyone:
+        if capture_result_config.viewable_to_everyone:
             update_res_perm_response = self.co_client.update_permissions(
                 data_asset_id=results_data_asset_id, everyone="viewer"
             )
@@ -370,213 +395,61 @@ class CodeOceanJob:
             )
         return reg_result_response
 
-    def run(
-        self,
-        capsule_id: Optional[str] = None,
-        pipeline_id: Optional[str] = None,
-        data_assets: Optional[Union[List[Dict], Tuple[Dict]]] = None,
-        run_capsule_config: dict = {},
-        capture_results: bool = True,
-        capture_result_config: dict = {},
-    ) -> dict:
+    def process(self) -> dict:
         """
-        Method to run a computation and optionally capture the results.
-
-        Parameters
-        ----------
-        capsule_id : str or None
-            ID of the capsule to run.
-        pipeline_id : str or None
-            ID of the pipeline to run.
-        data_assets : Optional[Union[List[Dict], Tuple[Dict]]]
-            List of data assets for the capsule to run against. The dict
-            should have the keys id and mount.
-        run_capsule_config : dict
-            Configuration parameters for running a capsule.
-            Optional keys:
-                * run_parameters: List[str]
-                    The parameters to pass to the capsule.
-                * pause_interval: int
-                    How often to check if the capsule run is finished.
-                    Default is 300 seconds.
-                * capsule_version: int
-                    Run a specific version of the capsule to be run.
-                    Default is None.
-                * timeout_seconds:
-                    If pause_interval is set, the max wait time to check if
-                    the capsule is finished. Default is None.
-        capture_results : bool
-            Whether to capture the results of the capsule run,
-            default is True.
-        capture_result_config : dict
-            Configuration parameters for capturing results.
-            Required keys (if capture_results is True):
-                * asset_name: str
-                    To add the current time to the asset name, use the
-                    magic string: {capture_time} notation. The default
-                    datetime format is: "%Y-%m-%d_%H-%M-%S". To use a
-                    different format, use: {capture_time:date_time_format}.
-                * mount: str
-                    The mount folder name.
-            Optional keys:
-                * viewable_to_everyone: bool
-                    Whether to share the captured results with everyone.
-                    Default is False.
-                * custom_metadata: dict
-                    What key:value metadata tags to apply to the asset.
-                * tags: List[str]
-                    The tags to use to describe the data asset.
+        Method to process data with a Code Ocean capsule/pipeline.
         """
-        # 1. run capsule
-        assert (
-            capsule_id is not None or pipeline_id is not None
-        ), "Either capsule_id or pipeline_id must be provided"
-        if capsule_id is not None:
-            assert (
-                pipeline_id is None
-            ), "If capsule_id is provided, then pipeline_id must be None"
-            if "capsule_id" not in run_capsule_config:
-                run_capsule_config["capsule_id"] = capsule_id
-        if pipeline_id is not None:
-            assert (
-                capsule_id is None
-            ), "If pipeline_id is provided, then capsule_id must be None"
-            if "pipeline_id" not in run_capsule_config:
-                run_capsule_config["pipeline_id"] = pipeline_id
-        if "data_assets" not in run_capsule_config:
-            run_capsule_config["data_assets"] = data_assets
-        else:
-            assert isinstance(
-                data_assets, (list, tuple)
-            ), "data_assets must be a list or tuple"
-            run_capsule_config["data_assets"].extend(data_assets)
+        responses = dict()
 
-        run_capsule_response = self.run_capsule(**run_capsule_config)
-        computation_id = run_capsule_response.json()["id"]
-
-        # 2. capture results
-        if capture_results:
-            assert (
-                "asset_name" in capture_result_config
-            ), "asset_name must be provided"
-            assert "mount" in capture_result_config, "mount must be provided"
-            assert (
-                "computation_id" not in capture_result_config
-            ), "computation_id must not be provided"
-            capture_result_config["computation_id"] = computation_id
-            capture_results_response = self.capture_result(
-                **capture_result_config
+        # 1. register data assets (optional)
+        if self.job_config.register_config is not None:
+            logger.info("Registering data asset")
+            register_data_asset_response = self._register_data_and_update_permissions(
+                self.job_config.register_config
             )
-        else:
-            capture_results_response = None
-        return dict(run=run_capsule_response, capture=capture_results_response)
-
-    def register_and_run(
-        self,
-        capsule_id: Optional[str] = None,
-        pipeline_id: Optional[str] = None,
-        register_data_config: dict = {},
-        run_capsule_config: dict = {},
-        additional_data_assets: Optional[List[Dict]] = None,
-        capture_results: bool = True,
-        capture_result_config: dict = {},
-    ) -> dict:
-        """
-        Method to register and process data with a Code Ocean capsule/pipeline.
-
-        Parameters
-        ----------
-        capsule_id : str or None
-            ID of the capsule or pipeline to run.
-        pipeline_id : str or None
-            ID of the pipeline to run.
-        register_data_config : dict
-            Configuration parameters for registering data assets.
-            Required keys:
-                * asset_name: str
-                    The name to give the data asset.
-                * mount: str
-                    The mount folder name.
-                * bucket: str
-                    The s3 bucket the data asset is located.
-                * prefix: str
-                    The s3 prefix where the data asset is located.
-                * access_key_id: str
-                    The aws access key to access the bucket/prefix.
-                * secret_access_key: str
-                    The aws secret access key to access the bucket/prefix.
-            Optional keys:
-                * tags
-                * custom_metadata
-        run_capsule_config : dict
-            Configuration parameters for running a capsule.
-            Optional keys:
-                * run_parameters: List[str]
-                    The parameters to pass to the capsule.
-                * pause_interval: int
-                    How often to check if the capsule run is finished.
-                    Default is 300 seconds.
-                * capsule_version: int
-                    Run a specific version of the capsule to be run.
-                    Default is None.
-                * timeout_seconds:
-                    If pause_interval is set, the max wait time to check if
-                    the capsule is finished. Default is None.
-        additional_data_assets : Optional[List[Dict]]
-            Additional data assets to attach to the capsule run.
-        capture_results : bool
-            Whether to capture the results of the capsule run,
-            default is True.
-        capture_result_config : dict
-            Configuration parameters for capturing results.
-            Required keys (if capture_results is True):
-                * asset_name: str
-                    To add the current time to the asset name, use the
-                    magic string: {capture_time} notation. The default
-                    datetime format is: "%Y-%m-%d_%H-%M-%S". To use a
-                    different format, use: {capture_time:date_time_format}.
-                * mount: str
-                    The mount folder name.
-            Optional keys:
-                * viewable_to_everyone: bool
-                    Whether to share the captured results with everyone.
-                    Default is False.
-                * custom_metadata: dict
-                    What key:value metadata tags to apply to the asset.
-                * tags: List[str]
-                    The tags to use to describe the data asset.
-
-        Returns
-        -------
-        dict
-            Dictionary with keys register, run, and capture.
-            The values are the responses from the register, run,
-            and capture requests.
-
-        """
-        # 1. register data assets
-        data_asset_reg_response = self.register_data_and_update_permissions(
-            **register_data_config
-        )
-
-        # 2. create data assets
-        data_assets = [
-            dict(
-                id=data_asset_reg_response.json()["id"],
-                mount=register_data_config["mount"],
+            self.job_config.run_capsule_config.data_assets.append(
+                dict(
+                    id=register_data_asset_response.json()["id"],
+                    mount=self.job_config.register_config.mount,
+                )
             )
-        ]
-        if additional_data_assets is not None:
-            data_assets.extend(additional_data_assets)
+            data_asset_tags = self.job_config.register_config.tags
+            data_asset_custom_metadata = deepcopy(self.job_config.register_config.custom_metadata)
+            responses["register"] = register_data_asset_response
+        else:
+            if len(self.job_config.run_capsule_config.data_assets) == 1:
+                data_asset = self.job_config.run_capsule_config.data_assets[0]
+                data_asset_json = self.co_client.get_data_asset(data_asset["id"]).json()
+                data_asset_tags = data_asset_json["tags"]
+                data_asset_custom_metadata = data_asset_json["custom_metadata"]
+            else:
+                # tags and custom_metadata are not propagated if multiple data assets are provided
+                data_asset_tags = []
+                data_asset_custom_metadata = {}
 
-        # 3. process data
-        responses = self.run(
-            capsule_id=capsule_id,
-            pipeline_id=pipeline_id,
-            data_assets=data_assets,
-            run_capsule_config=run_capsule_config,
-            capture_results=capture_results,
-            capture_result_config=capture_result_config,
+        # 2. run capsule
+        logger.info("Running capsule")
+        run_capsule_response = self._run_capsule(
+            self.job_config.run_capsule_config
         )
-        responses.update(dict(register=data_asset_reg_response))
+        responses["run"] = run_capsule_response
+
+        # 3. capture results (optional)
+        if self.job_config.capture_result_config is not None:
+            logger.info("Capturing results")
+            result_tags = [
+                DataLevel.DERIVED.value if x == DataLevel.RAW.value else x
+                for x in data_asset_tags
+            ]
+            self.job_config.capture_result_config.tags.extend(result_tags)
+            results_metadata = deepcopy(data_asset_custom_metadata)
+            results_metadata["data level"] = "derived data"
+            self.job_config.capture_result_config.custom_metadata.update(results_metadata)
+            capture_result_response = self._capture_result(
+                computation_id=run_capsule_response.json()["id"],
+                input_data_asset_name=self.job_config.register_config.asset_name,
+                capture_result_config=self.job_config.capture_result_config
+            )
+            responses["capture"] = capture_result_response
+
         return responses
