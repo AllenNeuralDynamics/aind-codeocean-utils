@@ -50,7 +50,8 @@ class CodeOceanJob:
             Configuration parameters for the job.
 
             * register_config : optional
-                Configuration parameters for registering data assets, including:
+                Configuration parameters for registering data assets,
+                including:
 
                 * asset_name : str
                     The name to give the data asset
@@ -71,41 +72,49 @@ class CodeOceanJob:
                 * pipeline_id : str or None
                     ID of the pipeline to run.
                 * data_assets : List[Dict]
-                    List of data assets for the capsule to run against. Each entry dict
-                    should have the 'keys' id and 'mount'.
+                    List of data assets for the capsule to run against.
+                    Each entry dict should have the 'keys' id and 'mount'.
                 * run_parameters : Optional[List]
                     List of parameters to pass to the capsule.
                 * pause_interval : Optional[int]
                     How often to check if the capsule run is finished.
-                    If None, then the method will return immediately without waiting
-                    for the computation to finish.
+                    If None, then the method will return immediately without
+                    waiting for the computation to finish.
                 * capsule_version : Optional[int]
                     Run a specific version of the capsule to be run
                     Default is None.
                 * timeout_seconds : Optional[int]
-                    If pause_interval is set, the max wait time to check if the
-                    capsule is finished.
+                    If pause_interval is set, the max wait time to check if
+                    the capsule is finished.
 
             * capture_result_config : optional
                 Configuration parameters for capturing results, including:
 
                 * process_name : Optional[str]
-                    Name of the process. When it is provided and asset_name is None,
-                    the output data asset name will be: {input_data_asset_name}_{process_name}_{capture_time}.
-                    Note that if multiple input data assets are provided, then the asset_name will be required.
+                    Name of the process. When it is provided and asset_name is
+                    None, the output data asset name will be:
+                    {input_data_asset_name}_{process_name}_{capture_time}.
+                    Note that if multiple input data assets are provided,
+                    then the asset_name will be required.
                 * mount : Optional[str]
-                    The mount folder name. If None, then the mount folder name will be the same as the asset_name.
+                    The mount folder name. If None, then the mount folder name
+                    will be the same as the asset_name.
                 * asset_name : Optional[str]
-                    The name to give the data asset. If multiple input data assets are provided,
+                    The name to give the data asset. If multiple input data
+                    assets are provided,
                     then this must be provided.
                 * tags : Optional[List[str]]
-                    The tags to add to describe the output data asset in addition to the input data asset tags.
-                    In case multiple input data assets are provided, the input data tags are not propagated to the
+                    The tags to add to describe the output data asset in
+                    addition to the input data asset tags.
+                    In case multiple input data assets are provided,
+                    the input data tags are not propagated to the
                     output data asset.
                 * custom_metadata : Optional[dict]
-                    What key:value metadata tags to add to the output data asset in addition to the input data asset
-                    custom_metadata. In case multiple input data assets are provided, the input data custom_metadata
-                    is not propagated to the output data asset.
+                    What key:value metadata tags to add to the output data
+                    asset in addition to the input data asset
+                    custom_metadata. In case multiple input data assets are
+                    provided, the input data custom_metadata is not propagated
+                    to the output data asset.
                 * viewable_to_everyone : bool
                     Whether to share the captured results with everyone.
         """
@@ -180,8 +189,8 @@ class CodeOceanJob:
                 List of parameters to pass to the capsule.
             pause_interval : Optional[int]
                 How often to check if the capsule run is finished.
-                If None, then the method will return immediately without waiting
-                for the computation to finish.
+                If None, then the method will return immediately without
+                waiting for the computation to finish.
             capsule_version : Optional[int]
                 Run a specific version of the capsule to be run
             timeout_seconds : Optional[int]
@@ -266,8 +275,8 @@ class CodeOceanJob:
             * custom_metadata : Optional[dict]
                 What key:value metadata tags to apply to the asset.
             * viewable_to_everyone : bool
-                If set to true, then the data asset will be shared with everyone.
-                Default is false.
+                If set to true, then the data asset will be shared with
+                everyone. Default is false.
 
         Notes
         -----
@@ -359,7 +368,8 @@ class CodeOceanJob:
                 input_data_asset_name is not None
             ), "Either asset_name or input_data_asset_name must be provided"
             capture_time = datetime_to_name_string(datetime.now())
-            capture_result_config.asset_name = f"{input_data_asset_name}_{capture_result_config.process_name}_{capture_time}"
+            capture_result_config.asset_name = \
+                f"{input_data_asset_name}_{capture_result_config.process_name}_{capture_time}"
 
         if capture_result_config.mount is None:
             capture_result_config.mount = capture_result_config.asset_name
@@ -442,7 +452,8 @@ class CodeOceanJob:
                 data_asset_tags = data_asset_json["tags"]
                 data_asset_custom_metadata = data_asset_json["custom_metadata"]
             else:
-                # tags and custom_metadata are not propagated if multiple data assets are provided
+                # tags and custom_metadata are not propagated if multiple data
+                # assets are provided
                 data_asset_tags = []
                 data_asset_custom_metadata = {}
 

@@ -39,7 +39,7 @@ class RegisterDataConfig(BaseModel):
 
     @model_validator(mode="after")
     def check_tags_and_custom_metadata(self) -> "RegisterDataConfig":
-        """Check that tags and custom_metadata are lists and dicts, respectively."""
+        """Check that tags and custom_metadata are lists and dicts"""
         if self.tags is None:
             self.tags = []
         if self.custom_metadata is None:
@@ -60,7 +60,10 @@ class RunCapsuleConfig(BaseModel):
     )
     data_assets: Optional[List[Dict]] = Field(
         default=None,
-        description="List of data assets for the capsule to run against. The dict should have the keys id and mount.",
+        description=(
+            "List of data assets for the capsule to run against. "
+            "The dict should have the keys id and mount."
+        ),
     )
     run_parameters: Optional[List] = Field(
         default=None, description="The parameters to pass to the capsule."
@@ -75,12 +78,17 @@ class RunCapsuleConfig(BaseModel):
     )
     timeout_seconds: Optional[int] = Field(
         default=None,
-        description="If pause_interval is set, the max wait time to check if the capsule is finished.",
+        description=(
+            "If pause_interval is set, the max wait time to check if the "
+            "capsule is finished."
+            ),
     )
 
     @model_validator(mode="after")
     def check_data_assets(self) -> "RunCapsuleConfig":
-        """Check that data_assets is a list of dicts with keys 'id' and 'mount'."""
+        """
+        Check that data_assets is a list of dicts with keys 'id' and 'mount'.
+        """
         if self.data_assets is not None:
             assert isinstance(
                 self.data_assets, (list, tuple)
@@ -124,7 +132,7 @@ class CaptureResultConfig(BaseModel):
 
     @model_validator(mode="after")
     def check_asset_and_metadata(self) -> "CaptureResultConfig":
-        """Check that asset_name and custom_metadata are lists and dicts, respectively."""
+        """Check that asset_name and custom_metadata are lists and dicts"""
         if self.asset_name is None:
             assert (
                 self.process_name is not None
