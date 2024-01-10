@@ -13,13 +13,16 @@ from aind_codeocean_api.models.data_assets_requests import (
     Source,
     Sources,
 )
-from aind_data_schema.core.data_description import DataLevel, datetime_to_name_string
+from aind_data_schema.core.data_description import (
+    DataLevel,
+    datetime_to_name_string,
+)
 
 from aind_codeocean_utils.models import (
     CodeOceanJobConfig,
     RegisterDataConfig,
     RunCapsuleConfig,
-    CaptureResultConfig
+    CaptureResultConfig,
 )
 
 logger = logging.getLogger(__name__)
@@ -30,7 +33,12 @@ class CodeOceanJob:
     This class contains convenient methods to register data assets,
     run capsules, and capture results.
     """
-    def __init__(self, co_client: CodeOceanClient, job_config: Union[dict, CodeOceanJobConfig]):
+
+    def __init__(
+        self,
+        co_client: CodeOceanClient,
+        job_config: Union[dict, CodeOceanJobConfig],
+    ):
         """
         CapsuleJob class constructor.
 
@@ -92,7 +100,7 @@ class CodeOceanJob:
                     then this must be provided.
                 * tags : Optional[List[str]]
                     The tags to add to describe the output data asset in addition to the input data asset tags.
-                    In case multiple input data assets are provided, the input data tags are not propagated to the 
+                    In case multiple input data assets are provided, the input data tags are not propagated to the
                     output data asset.
                 * custom_metadata : Optional[dict]
                     What key:value metadata tags to add to the output data asset in addition to the input data asset
@@ -148,8 +156,7 @@ class CodeOceanJob:
         return response
 
     def _run_capsule(
-        self,
-        run_capsule_config: RunCapsuleConfig
+        self, run_capsule_config: RunCapsuleConfig
     ) -> requests.Response:
         """
         Run a specified capsule with the given data assets. If the
@@ -221,14 +228,16 @@ class CodeOceanJob:
 
                 if (curr_computation_state["state"] == "completed") or (
                     (run_capsule_config.timeout_seconds is not None)
-                    and (run_capsule_config.pause_interval * num_checks >= run_capsule_config.timeout_seconds)
+                    and (
+                        run_capsule_config.pause_interval * num_checks
+                        >= run_capsule_config.timeout_seconds
+                    )
                 ):
                     executing = False
         return run_capsule_response
 
     def _register_data_and_update_permissions(
-        self,
-        register_data_config: RegisterDataConfig
+        self, register_data_config: RegisterDataConfig
     ) -> requests.Response:
         """
         Register a data asset. Can also optionally update the permissions on
@@ -238,7 +247,7 @@ class CodeOceanJob:
         ----------
         register_data_config : RegisterDataConfig
             The configuration for registering the data asset, including:
- 
+
             * asset_name : str
                 The name to give the data asset
             * mount : str
@@ -277,7 +286,9 @@ class CodeOceanJob:
         source = Source(aws=aws_source)
         create_data_asset_request = CreateDataAssetRequest(
             name=register_data_config.asset_name,
-            tags=register_data_config.tags if register_data_config.tags is not None else [],
+            tags=register_data_config.tags
+            if register_data_config.tags is not None
+            else [],
             mount=register_data_config.mount,
             source=source,
             custom_metadata=register_data_config.custom_metadata,
@@ -311,7 +322,7 @@ class CodeOceanJob:
         self,
         computation_id: str,
         input_data_asset_name: Optional[str],
-        capture_result_config: CaptureResultConfig
+        capture_result_config: CaptureResultConfig,
     ) -> requests.Response:
         """
         Capture a result as a data asset. Can also share it with everyone.
@@ -330,7 +341,7 @@ class CodeOceanJob:
             * mount : str
                 The mount folder name.
             * asset_name : Optional[str]
-                The name to give the data asset.            
+                The name to give the data asset.
             * tags : Optional[List[str]]
                 The tags to use to describe the data asset.
             * custom_metadata : Optional[dict]
@@ -344,7 +355,9 @@ class CodeOceanJob:
 
         """
         if capture_result_config.asset_name is None:
-            assert input_data_asset_name is not None, "Either asset_name or input_data_asset_name must be provided"
+            assert (
+                input_data_asset_name is not None
+            ), "Either asset_name or input_data_asset_name must be provided"
             capture_time = datetime_to_name_string(datetime.now())
             capture_result_config.asset_name = f"{input_data_asset_name}_{capture_result_config.process_name}_{capture_time}"
 
@@ -404,8 +417,10 @@ class CodeOceanJob:
         # 1. register data assets (optional)
         if self.job_config.register_config is not None:
             logger.info("Registering data asset")
-            register_data_asset_response = self._register_data_and_update_permissions(
-                self.job_config.register_config
+            register_data_asset_response = (
+                self._register_data_and_update_permissions(
+                    self.job_config.register_config
+                )
             )
             self.job_config.run_capsule_config.data_assets.append(
                 dict(
@@ -414,12 +429,16 @@ class CodeOceanJob:
                 )
             )
             data_asset_tags = self.job_config.register_config.tags
-            data_asset_custom_metadata = deepcopy(self.job_config.register_config.custom_metadata)
+            data_asset_custom_metadata = deepcopy(
+                self.job_config.register_config.custom_metadata
+            )
             responses["register"] = register_data_asset_response
         else:
             if len(self.job_config.run_capsule_config.data_assets) == 1:
                 data_asset = self.job_config.run_capsule_config.data_assets[0]
-                data_asset_json = self.co_client.get_data_asset(data_asset["id"]).json()
+                data_asset_json = self.co_client.get_data_asset(
+                    data_asset["id"]
+                ).json()
                 data_asset_tags = data_asset_json["tags"]
                 data_asset_custom_metadata = data_asset_json["custom_metadata"]
             else:
@@ -444,11 +463,13 @@ class CodeOceanJob:
             self.job_config.capture_result_config.tags.extend(result_tags)
             results_metadata = deepcopy(data_asset_custom_metadata)
             results_metadata["data level"] = "derived data"
-            self.job_config.capture_result_config.custom_metadata.update(results_metadata)
+            self.job_config.capture_result_config.custom_metadata.update(
+                results_metadata
+            )
             capture_result_response = self._capture_result(
                 computation_id=run_capsule_response.json()["id"],
                 input_data_asset_name=self.job_config.register_config.asset_name,
-                capture_result_config=self.job_config.capture_result_config
+                capture_result_config=self.job_config.capture_result_config,
             )
             responses["capture"] = capture_result_response
 
