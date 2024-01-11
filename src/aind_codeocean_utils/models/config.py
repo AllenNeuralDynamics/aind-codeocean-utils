@@ -1,6 +1,7 @@
 """Models for config files."""
-from pydantic import BaseModel, Field, model_validator
 from typing import Dict, List, Optional
+
+from pydantic import BaseModel, Field, model_validator
 
 
 class RegisterDataConfig(BaseModel):
@@ -81,7 +82,7 @@ class RunCapsuleConfig(BaseModel):
         description=(
             "If pause_interval is set, the max wait time to check if the "
             "capsule is finished."
-            ),
+        ),
     )
 
     @model_validator(mode="after")

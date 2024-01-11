@@ -18,11 +18,11 @@ from aind_data_schema.core.data_description import (
     datetime_to_name_string,
 )
 
-from aind_codeocean_utils.models import (
+from aind_codeocean_utils.models.config import (
+    CaptureResultConfig,
     CodeOceanJobConfig,
     RegisterDataConfig,
     RunCapsuleConfig,
-    CaptureResultConfig,
 )
 
 logger = logging.getLogger(__name__)
@@ -289,7 +289,9 @@ class CodeOceanJob:
         aws_source = Sources.AWS(
             bucket=register_data_config.bucket,
             prefix=register_data_config.prefix,
-            keep_on_external_storage=register_data_config.keep_on_external_storage,
+            keep_on_external_storage=(
+                register_data_config.keep_on_external_storage
+            ),
             public=register_data_config.public,
         )
         source = Source(aws=aws_source)
@@ -368,8 +370,11 @@ class CodeOceanJob:
                 input_data_asset_name is not None
             ), "Either asset_name or input_data_asset_name must be provided"
             capture_time = datetime_to_name_string(datetime.now())
-            capture_result_config.asset_name = \
-                f"{input_data_asset_name}_{capture_result_config.process_name}_{capture_time}"
+            capture_result_config.asset_name = (
+                f"{input_data_asset_name}"
+                f"_{capture_result_config.process_name}"
+                f"_{capture_time}"
+            )
 
         if capture_result_config.mount is None:
             capture_result_config.mount = capture_result_config.asset_name
@@ -395,7 +400,8 @@ class CodeOceanJob:
         #  figure out why.
         if registered_results_response_json.get("id") is None:
             raise KeyError(
-                f"Something went wrong registering {capture_result_config.asset_name}. "
+                f"Something went wrong registering"
+                f" {capture_result_config.asset_name}. "
                 f"Response Status Code: {reg_result_response.status_code}. "
                 f"Response Message: {registered_results_response_json}"
             )
@@ -479,7 +485,9 @@ class CodeOceanJob:
             )
             capture_result_response = self._capture_result(
                 computation_id=run_capsule_response.json()["id"],
-                input_data_asset_name=self.job_config.register_config.asset_name,
+                input_data_asset_name=(
+                    self.job_config.register_config.asset_name
+                ),
                 capture_result_config=self.job_config.capture_result_config,
             )
             responses["capture"] = capture_result_response
