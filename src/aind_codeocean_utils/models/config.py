@@ -1,7 +1,10 @@
 """Models for config files."""
 from typing import Dict, List, Optional
 
-from pydantic import BaseModel, Field, model_validator
+from aind_codeocean_api.models.computations_requests import (
+    ComputationDataAsset,
+)
+from pydantic import BaseModel, Field, ValidationInfo, field_validator
 
 
 class RegisterDataConfig(BaseModel):
@@ -26,8 +29,8 @@ class RegisterDataConfig(BaseModel):
         default=True,
         description="Whether to keep the data asset on external storage.",
     )
-    tags: Optional[List[str]] = Field(
-        default=None, description="The tags to use to describe the data asset."
+    tags: List[str] = Field(
+        default=[], description="The tags to use to describe the data asset."
     )
     custom_metadata: Optional[Dict] = Field(
         default=None,
@@ -38,14 +41,13 @@ class RegisterDataConfig(BaseModel):
         description="Whether to share the captured results with everyone.",
     )
 
-    @model_validator(mode="after")
-    def check_tags_and_custom_metadata(self) -> "RegisterDataConfig":
-        """Check that tags and custom_metadata are lists and dicts"""
-        if self.tags is None:
-            self.tags = []
-        if self.custom_metadata is None:
-            self.custom_metadata = {}
-        return self
+    @field_validator("tags", mode="before")
+    def check_tags(cls, v: Optional[List[str]]) -> List[str]:
+        """Allows user to input None and converts them to empty collection"""
+        if v is not None:
+            return v
+        else:
+            return []
 
 
 class RunCapsuleConfig(BaseModel):
@@ -57,14 +59,13 @@ class RunCapsuleConfig(BaseModel):
         default=None, description="ID of the capsule to run."
     )
     pipeline_id: Optional[str] = Field(
-        default=None, description="ID of the pipeline to run."
-    )
-    data_assets: Optional[List[Dict]] = Field(
         default=None,
-        description=(
-            "List of data assets for the capsule to run against. "
-            "The dict should have the keys id and mount."
-        ),
+        description="ID of the pipeline to run.",
+        validate_default=True,
+    )
+    data_assets: Optional[List[ComputationDataAsset]] = Field(
+        default=None,
+        description=("List of data assets for the capsule to run against. "),
     )
     run_parameters: Optional[List] = Field(
         default=None, description="The parameters to pass to the capsule."
@@ -85,24 +86,36 @@ class RunCapsuleConfig(BaseModel):
         ),
     )
 
-    @model_validator(mode="after")
-    def check_data_assets(self) -> "RunCapsuleConfig":
+    @field_validator("pipeline_id", mode="after")
+    def validate_pipeline_id(
+        cls, v: Optional[str], info: ValidationInfo
+    ) -> Optional[str]:
+        """Check that only one of capsule_id or pipeline_id is set."""
+        if info.data.get("capsule_id") is None and v is None:
+            raise ValueError("Either capsule_id or pipeline must be set.")
+        elif info.data.get("capsule_id") is not None and v is not None:
+            raise ValueError(
+                "Only one of capsule_id or pipeline_id can be set."
+            )
+        return v
+
+    @field_validator("data_assets", mode="before")
+    def check_data_assets(
+        cls, v: Optional[list]
+    ) -> Optional[List[ComputationDataAsset]]:
         """
-        Check that data_assets is a list of dicts with keys 'id' and 'mount'.
+        Coerces dictionaries into ComputationDataAsset type
         """
-        if self.data_assets is not None:
-            assert isinstance(
-                self.data_assets, (list, tuple)
-            ), "data_assets must be a list or tuple"
-            assert all(
-                [
-                    "id" in data_asset and "mount" in data_asset
-                    for data_asset in self.data_assets
-                ]
-            ), "data_assets must be a list of dicts with keys 'id' and 'mount'"
+        if v is None:
+            return None
         else:
-            self.data_assets = []
-        return self
+            updated_list = []
+            for item in v:
+                if isinstance(item, ComputationDataAsset):
+                    updated_list.append(item)
+                elif isinstance(item, dict):
+                    updated_list.append(ComputationDataAsset(**item))
+            return updated_list
 
 
 class CaptureResultConfig(BaseModel):
@@ -117,10 +130,12 @@ class CaptureResultConfig(BaseModel):
         default=None, description="The mount folder name."
     )
     asset_name: Optional[str] = Field(
-        default=None, description="The name to give the data asset."
+        default=None,
+        description="The name to give the data asset.",
+        validate_default=True,
     )
-    tags: Optional[List[str]] = Field(
-        default=None, description="The tags to use to describe the data asset."
+    tags: List[str] = Field(
+        default=[], description="The tags to use to describe the data asset."
     )
     custom_metadata: Optional[Dict] = Field(
         default=None,
@@ -131,18 +146,24 @@ class CaptureResultConfig(BaseModel):
         description="Whether to share the captured results with everyone.",
     )
 
-    @model_validator(mode="after")
-    def check_asset_and_metadata(self) -> "CaptureResultConfig":
-        """Check that asset_name and custom_metadata are lists and dicts"""
-        if self.asset_name is None:
-            assert (
-                self.process_name is not None
-            ), "Either asset_name or process_name must be provided"
-        if self.tags is None:
-            self.tags = []
-        if self.custom_metadata is None:
-            self.custom_metadata = {}
-        return self
+    @field_validator("tags", mode="before")
+    def check_tags(cls, v: Optional[List[str]]) -> List[str]:
+        """Allows user to input None and converts them to empty collection"""
+        if v is not None:
+            return v
+        else:
+            return []
+
+    @field_validator("asset_name", mode="after")
+    def validate_asset_name(
+        cls, v: Optional[str], info: ValidationInfo
+    ) -> Optional[str]:
+        """Check that asset_name is not None if process_name is None"""
+        if info.data.get("process_name") is None and v is None:
+            raise ValueError(
+                "Either asset_name or process_name must be provided"
+            )
+        return v
 
 
 class CodeOceanJobConfig(BaseModel):
@@ -154,7 +175,7 @@ class CodeOceanJobConfig(BaseModel):
         default=None, description="Settings for registering data"
     )
     run_capsule_config: RunCapsuleConfig = Field(
-        description="Settings for running a capsule"
+        ..., description="Settings for running a capsule"
     )
     capture_result_config: Optional[CaptureResultConfig] = Field(
         default=None, description="Settings for capturing results"

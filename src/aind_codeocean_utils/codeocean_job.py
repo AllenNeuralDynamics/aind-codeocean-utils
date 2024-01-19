@@ -3,11 +3,14 @@ import logging
 import time
 from copy import deepcopy
 from datetime import datetime
-from typing import Optional, Union
+from typing import Optional
 
 import requests
 from aind_codeocean_api.codeocean import CodeOceanClient
-from aind_codeocean_api.models.computations_requests import RunCapsuleRequest
+from aind_codeocean_api.models.computations_requests import (
+    ComputationDataAsset,
+    RunCapsuleRequest,
+)
 from aind_codeocean_api.models.data_assets_requests import (
     CreateDataAssetRequest,
     Source,
@@ -37,7 +40,7 @@ class CodeOceanJob:
     def __init__(
         self,
         co_client: CodeOceanClient,
-        job_config: Union[dict, CodeOceanJobConfig],
+        job_config: CodeOceanJobConfig,
     ):
         """
         CapsuleJob class constructor.
@@ -46,7 +49,7 @@ class CodeOceanJob:
         ----------
         co_client : CodeOceanClient
             A client that can be used to interface with the Code Ocean API.
-        job_config : Union[dict, CodeOceanJobConfig]
+        job_config : CodeOceanJobConfig
             Configuration parameters for the job.
 
             * register_config : optional
@@ -119,8 +122,6 @@ class CodeOceanJob:
                     Whether to share the captured results with everyone.
         """
         self.co_client = co_client
-        if isinstance(job_config, dict):
-            job_config = CodeOceanJobConfig(**job_config)
         self.job_config = job_config
 
     def _wait_for_data_availability(
@@ -205,14 +206,14 @@ class CodeOceanJob:
         if run_capsule_config.data_assets is not None:
             # check if data assets exist
             for data_asset in run_capsule_config.data_assets:
-                data_asset_id = data_asset["id"]
+                data_asset_id = data_asset.id
                 response = self.co_client.get_data_asset(data_asset_id)
-                response_json = response.json()
-                if (
-                    "message" in response_json
-                    and "not found" in response_json["message"]
-                ):
+                if response.status_code == 404:
                     raise FileNotFoundError(f"Unable to find: {data_asset_id}")
+                elif response.status_code != 200:
+                    raise ConnectionError(
+                        f"There was an issue retrieving: {data_asset_id}"
+                    )
 
         run_capsule_request = RunCapsuleRequest(
             capsule_id=run_capsule_config.capsule_id,
@@ -221,19 +222,22 @@ class CodeOceanJob:
             parameters=run_capsule_config.run_parameters,
             version=run_capsule_config.capsule_version,
         )
+        # TODO: Handle case of bad response from code ocean
         run_capsule_response = self.co_client.run_capsule(run_capsule_request)
         run_capsule_response_json = run_capsule_response.json()
         computation_id = run_capsule_response_json["id"]
 
+        # TODO: We may need to clean up the loop termination logic
         if run_capsule_config.pause_interval:
             executing = True
             num_checks = 0
             while executing:
                 num_checks += 1
                 time.sleep(run_capsule_config.pause_interval)
-                curr_computation_state = self.co_client.get_computation(
+                computation_response = self.co_client.get_computation(
                     computation_id
-                ).json()
+                )
+                curr_computation_state = computation_response.json()
 
                 if (curr_computation_state["state"] == "completed") or (
                     (run_capsule_config.timeout_seconds is not None)
@@ -297,9 +301,7 @@ class CodeOceanJob:
         source = Source(aws=aws_source)
         create_data_asset_request = CreateDataAssetRequest(
             name=register_data_config.asset_name,
-            tags=register_data_config.tags
-            if register_data_config.tags is not None
-            else [],
+            tags=register_data_config.tags,
             mount=register_data_config.mount,
             source=source,
             custom_metadata=register_data_config.custom_metadata,
@@ -424,7 +426,7 @@ class CodeOceanJob:
             )
         return reg_result_response
 
-    def process(self) -> dict:
+    def run_job(self) -> dict:
         """
         Method to process data with a Code Ocean capsule/pipeline.
         """
@@ -438,8 +440,11 @@ class CodeOceanJob:
                     self.job_config.register_config
                 )
             )
-            self.job_config.run_capsule_config.data_assets.append(
-                dict(
+            data_assets_to_process = deepcopy(
+                self.job_config.run_capsule_config.data_assets
+            )
+            data_assets_to_process.append(
+                ComputationDataAsset(
                     id=register_data_asset_response.json()["id"],
                     mount=self.job_config.register_config.mount,
                 )
@@ -453,7 +458,7 @@ class CodeOceanJob:
             if len(self.job_config.run_capsule_config.data_assets) == 1:
                 data_asset = self.job_config.run_capsule_config.data_assets[0]
                 data_asset_json = self.co_client.get_data_asset(
-                    data_asset["id"]
+                    data_asset.id
                 ).json()
                 data_asset_tags = data_asset_json["tags"]
                 data_asset_custom_metadata = data_asset_json["custom_metadata"]
@@ -479,7 +484,8 @@ class CodeOceanJob:
             ]
             self.job_config.capture_result_config.tags.extend(result_tags)
             results_metadata = deepcopy(data_asset_custom_metadata)
-            results_metadata["data level"] = "derived data"
+            # TODO: Where is this "data level" being defined?
+            results_metadata["data level"] = DataLevel.DERIVED.value
             self.job_config.capture_result_config.custom_metadata.update(
                 results_metadata
             )
