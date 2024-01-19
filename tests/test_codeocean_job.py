@@ -31,8 +31,12 @@ class TestCodeOceanJob(unittest.TestCase):
             prefix="asset_prefix",
             public=True,
             keep_on_external_storage=True,
-            tags=["a", "b"],
-            custom_metadata={"key1": "value1", "key2": "value2"},
+            tags=["a", "b", "raw"],
+            custom_metadata={
+                "key1": "value1",
+                "key2": "value2",
+                "data level": "raw"
+            },
             viewable_to_everyone=True,
         )
         basic_run_capsule_config = RunCapsuleConfig(
@@ -52,23 +56,34 @@ class TestCodeOceanJob(unittest.TestCase):
             mount="some_mount",
             asset_name="some_asset_name",
             tags=["x", "y"],
-            custom_metadata={"key1": "value1", "key2": "value2"},
+            custom_metadata={
+                "key1": "value1",
+                "key2": "value2",
+            },
             viewable_to_everyone=True,
         )
         none_vals_capture_result_config = CaptureResultConfig(
             process_name="some_process",
             mount=None,
             asset_name=None,
-            tags=["x", "y"],
-            custom_metadata={"key1": "value1", "key2": "value2"},
+            tags=["x", "y", "a", "b", "raw"],
+            custom_metadata={
+                "key1": "value1",
+                "key2": "value2",
+                "data_level": "raw"
+            },
             viewable_to_everyone=True,
         )
         none_vals_capture_result_config_w_asset_name = CaptureResultConfig(
             process_name="some_process",
             mount=None,
             asset_name="some_asset_name",
-            tags=["x", "y"],
-            custom_metadata={"key1": "value1", "key2": "value2"},
+            tags=["x", "y", "a", "b", "raw"],
+            custom_metadata={
+                "key1": "value1",
+                "key2": "value2",
+                "data_level": "raw"
+            },
             viewable_to_everyone=True,
         )
 
@@ -754,8 +769,12 @@ class TestCodeOceanJob(unittest.TestCase):
         mock_capture_result.assert_called_once_with(
             computation_id=fake_computation_id,
             input_data_asset_name="some_asset_name",
-            additional_tags=["a", "b"],
-            additional_custom_metadata={"key1": "value1", "key2": "value2"},
+            additional_tags=["a", "b", "raw"],
+            additional_custom_metadata={
+                "key1": "value1",
+                "key2": "value2",
+                "data level": "raw"
+            },
             capture_result_config=(
                 self.basic_codeocean_job_config.capture_result_config
             ),
