@@ -336,6 +336,8 @@ class CodeOceanJob:
         computation_id: str,
         input_data_asset_name: Optional[str],
         capture_result_config: CaptureResultConfig,
+        additional_tags: Optional[list] = None,
+        additional_custom_metadata: Optional[dict] = None,
     ) -> requests.Response:
         """
         Capture a result as a data asset. Can also share it with everyone.
@@ -361,6 +363,13 @@ class CodeOceanJob:
                 What key:value metadata tags to apply to the asset.
             * viewable_to_everyone : bool
                 Whether to share the captured results with everyone.
+        additional_tags : Optional[List[str]]
+            Additional tags to add to the data asset. If a data level RAW tag
+            is provided, it will be converted to DERIVED.
+        additional_custom_metadata : Optional[dict]
+            Additional custom metadata to add to the data asset. If a data
+            level custom metadata is provided, it will be converted to
+            DERIVED.
 
         Returns
         -------
@@ -372,25 +381,41 @@ class CodeOceanJob:
                 input_data_asset_name is not None
             ), "Either asset_name or input_data_asset_name must be provided"
             capture_time = datetime_to_name_string(datetime.now())
-            capture_result_config.asset_name = (
+            asset_name = (
                 f"{input_data_asset_name}"
                 f"_{capture_result_config.process_name}"
                 f"_{capture_time}"
             )
+        else:
+            asset_name = capture_result_config.asset_name
 
         if capture_result_config.mount is None:
-            capture_result_config.mount = capture_result_config.asset_name
+            mount = capture_result_config.asset_name
+        else:
+            mount = capture_result_config.mount
+
+        tags = capture_result_config.tags.copy()
+        if additional_tags is not None:
+            tags += [
+                DataLevel.DERIVED.value if x == DataLevel.RAW.value else x
+                for x in additional_tags
+            ]
+        custom_metadata = deepcopy(capture_result_config.custom_metadata)
+        if additional_custom_metadata is not None:
+            if "data level" in custom_metadata:
+                custom_metadata["data level"] = DataLevel.DERIVED.value
+            custom_metadata.update(additional_custom_metadata)
 
         computation_source = Sources.Computation(
             id=computation_id,
         )
         source = Source(computation=computation_source)
         create_data_asset_request = CreateDataAssetRequest(
-            name=capture_result_config.asset_name,
-            tags=capture_result_config.tags,
-            mount=capture_result_config.mount,
+            name=asset_name,
+            tags=tags,
+            mount=mount,
             source=source,
-            custom_metadata=capture_result_config.custom_metadata,
+            custom_metadata=custom_metadata,
         )
 
         reg_result_response = self.co_client.create_data_asset(
@@ -403,7 +428,7 @@ class CodeOceanJob:
         if registered_results_response_json.get("id") is None:
             raise KeyError(
                 f"Something went wrong registering"
-                f" {capture_result_config.asset_name}. "
+                f" {asset_name}. "
                 f"Response Status Code: {reg_result_response.status_code}. "
                 f"Response Message: {registered_results_response_json}"
             )
@@ -460,11 +485,13 @@ class CodeOceanJob:
                 data_asset_json = self.co_client.get_data_asset(
                     data_asset.id
                 ).json()
+                data_asset_name = data_asset_json["name"]
                 data_asset_tags = data_asset_json["tags"]
                 data_asset_custom_metadata = data_asset_json["custom_metadata"]
             else:
                 # tags and custom_metadata are not propagated if multiple data
                 # assets are provided
+                data_asset_name = None
                 data_asset_tags = []
                 data_asset_custom_metadata = {}
 
@@ -478,22 +505,28 @@ class CodeOceanJob:
         # 3. capture results (optional)
         if self.job_config.capture_result_config is not None:
             logger.info("Capturing results")
-            result_tags = [
-                DataLevel.DERIVED.value if x == DataLevel.RAW.value else x
-                for x in data_asset_tags
-            ]
-            self.job_config.capture_result_config.tags.extend(result_tags)
-            results_metadata = deepcopy(data_asset_custom_metadata)
-            # TODO: Where is this "data level" being defined?
-            results_metadata["data level"] = DataLevel.DERIVED.value
-            self.job_config.capture_result_config.custom_metadata.update(
-                results_metadata
-            )
+            # if the data asset was registered, then the input asset name will
+            # be the same as the new registered data asset name
+            if self.job_config.register_config is not None:
+                input_data_asset_name = (
+                    self.job_config.register_config.asset_name
+                )
+            elif self.job_config.capture_result_config.asset_name is None:
+                assert data_asset_name is not None, (
+                    "If a data asset was not registered and the job used "
+                    "more than one data asset, then the input_data_asset_name "
+                    "must be provided."
+                )
+                input_data_asset_name = data_asset_name
+            else:
+                input_data_asset_name = (
+                    self.job_config.capture_result_config.asset_name
+                )
             capture_result_response = self._capture_result(
                 computation_id=run_capsule_response.json()["id"],
-                input_data_asset_name=(
-                    self.job_config.register_config.asset_name
-                ),
+                input_data_asset_name=input_data_asset_name,
+                additional_tags=data_asset_tags,
+                additional_custom_metadata=data_asset_custom_metadata,
                 capture_result_config=self.job_config.capture_result_config,
             )
             responses["capture"] = capture_result_response

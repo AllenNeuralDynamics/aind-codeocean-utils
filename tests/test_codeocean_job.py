@@ -50,7 +50,7 @@ class TestCodeOceanJob(unittest.TestCase):
         basic_capture_result_config = CaptureResultConfig(
             process_name="some_process",
             mount="some_mount",
-            asset_name="some_asset",
+            asset_name="some_asset_name",
             tags=["x", "y"],
             custom_metadata={"key1": "value1", "key2": "value2"},
             viewable_to_everyone=True,
@@ -59,6 +59,14 @@ class TestCodeOceanJob(unittest.TestCase):
             process_name="some_process",
             mount=None,
             asset_name=None,
+            tags=["x", "y"],
+            custom_metadata={"key1": "value1", "key2": "value2"},
+            viewable_to_everyone=True,
+        )
+        none_vals_capture_result_config_w_asset_name = CaptureResultConfig(
+            process_name="some_process",
+            mount=None,
+            asset_name="some_asset_name",
             tags=["x", "y"],
             custom_metadata={"key1": "value1", "key2": "value2"},
             viewable_to_everyone=True,
@@ -77,10 +85,15 @@ class TestCodeOceanJob(unittest.TestCase):
             run_capsule_config=basic_run_capsule_config,
             capture_result_config=none_vals_capture_result_config,
         )
-        cls.no_reg_codeocean_job_config = CodeOceanJobConfig(
+        cls.no_reg_codeocean_job_config_no_asset_name = CodeOceanJobConfig(
             register_config=None,
             run_capsule_config=basic_run_capsule_config,
             capture_result_config=none_vals_capture_result_config,
+        )
+        cls.no_reg_codeocean_job_config = CodeOceanJobConfig(
+            register_config=None,
+            run_capsule_config=basic_run_capsule_config,
+            capture_result_config=none_vals_capture_result_config_w_asset_name,
         )
 
     def test_class_constructor(self):
@@ -624,7 +637,7 @@ class TestCodeOceanJob(unittest.TestCase):
             )
         self.assertEqual(
             (
-                'KeyError("Something went wrong registering some_asset.'
+                'KeyError("Something went wrong registering some_asset_name.'
                 " Response Status Code: 500. Response Message:"
                 " {'messsage': 'Something went wrong!'}\")"
             ),
@@ -736,24 +749,23 @@ class TestCodeOceanJob(unittest.TestCase):
         mock_run_capsule.assert_called_once_with(
             self.basic_codeocean_job_config.run_capsule_config
         )
+        # the run_capsule will propagate the additional_tags and
+        # additional_custom_metadata to the _capture_result method
         mock_capture_result.assert_called_once_with(
             computation_id=fake_computation_id,
             input_data_asset_name="some_asset_name",
+            additional_tags=["a", "b"],
+            additional_custom_metadata={"key1": "value1", "key2": "value2"},
             capture_result_config=(
                 self.basic_codeocean_job_config.capture_result_config
             ),
         )
 
     @patch("aind_codeocean_utils.codeocean_job.CodeOceanJob._capture_result")
-    @patch(
-        "aind_codeocean_utils.codeocean_job.CodeOceanJob"
-        "._register_data_and_update_permissions"
-    )
     @patch("aind_codeocean_utils.codeocean_job.CodeOceanJob._run_capsule")
     def test_run_job_no_registration(
         self,
         mock_run_capsule: MagicMock,
-        mock_register_data: MagicMock,
         mock_capture_result: MagicMock,
     ):
         """Tests run_job method with Optional register_data set to None"""
@@ -777,18 +789,33 @@ class TestCodeOceanJob(unittest.TestCase):
             job_config=self.no_reg_codeocean_job_config,
         )
         codeocean_job.run_job()
-        mock_register_data.assert_called_once_with(
-            self.basic_codeocean_job_config.register_config
-        )
+
         mock_run_capsule.assert_called_once_with(
-            self.basic_codeocean_job_config.run_capsule_config
+            self.no_reg_codeocean_job_config.run_capsule_config
         )
         mock_capture_result.assert_called_once_with(
             computation_id=fake_computation_id,
             input_data_asset_name="some_asset_name",
+            additional_tags=[],
+            additional_custom_metadata={},
             capture_result_config=(
-                self.basic_codeocean_job_config.capture_result_config
+                self.no_reg_codeocean_job_config.capture_result_config
             ),
+        )
+
+        with self.assertRaises(AssertionError) as e:
+            codeocean_job = CodeOceanJob(
+                co_client=self.co_client,
+                job_config=self.no_reg_codeocean_job_config_no_asset_name,
+            )
+            codeocean_job.run_job()
+        self.assertEqual(
+            (
+                "AssertionError('If a data asset was not registered and the "
+                "job used more than one data asset, then the "
+                "input_data_asset_name must be provided.')"
+            ),
+            repr(e.exception),
         )
 
 
