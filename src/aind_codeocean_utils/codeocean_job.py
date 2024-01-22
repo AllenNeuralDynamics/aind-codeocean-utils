@@ -3,7 +3,7 @@ import logging
 import time
 from copy import deepcopy
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 
 import requests
 from aind_codeocean_api.codeocean import CodeOceanClient
@@ -165,8 +165,38 @@ class CodeOceanJob:
                 break_flag = True
         return response
 
+    def check_data_assets(self, data_assets: List[ComputationDataAsset]) -> bool:
+        """
+        Check if data assets exist.
+
+        Parameters
+        ----------
+        data_assets : list
+            List of data assets to check for.
+
+        Returns
+        -------
+        bool
+            Whether the data assets exist or not.
+        """
+        for data_asset in data_assets:
+            assert isinstance(data_asset, ComputationDataAsset), (
+                "Data assets must be of type ComputationDataAsset"
+            )
+            data_asset_id = data_asset.id
+            response = self.co_client.get_data_asset(data_asset_id)
+            if response.status_code == 404:
+                raise FileNotFoundError(f"Unable to find: {data_asset_id}")
+            elif response.status_code != 200:
+                raise ConnectionError(
+                    f"There was an issue retrieving: {data_asset_id}"
+                )
+        return True
+
     def _run_capsule(
-        self, run_capsule_config: RunCapsuleConfig
+        self,
+        run_capsule_config: RunCapsuleConfig,
+        input_data_assets: List[ComputationDataAsset] = None
     ) -> requests.Response:
         """
         Run a specified capsule with the given data assets. If the
@@ -183,7 +213,7 @@ class CodeOceanJob:
                 ID of the Code Ocean capsule to be run
             * pipeline_id : str
                 ID of the Code Ocean pipeline to be run
-            * data_assets : List[Dict]
+            * data_assets : List[ComputationDataAsset]
                 List of data assets for the capsule to run against. The dict
                 should have the keys id and mount.
             * run_parameters : Optional[List]
@@ -197,28 +227,27 @@ class CodeOceanJob:
             timeout_seconds : Optional[int]
                 If pause_interval is set, the max wait time to check if the
                 capsule is finished.
+        input_data_assets : List[ComputationDataAsset]
+            List of additional data assets to run the computation with.
+            These can be, for example, data assets that were registered.
 
         Returns
         -------
         requests.Response
 
         """
+        data_assets = []
         if run_capsule_config.data_assets is not None:
             # check if data assets exist
-            for data_asset in run_capsule_config.data_assets:
-                data_asset_id = data_asset.id
-                response = self.co_client.get_data_asset(data_asset_id)
-                if response.status_code == 404:
-                    raise FileNotFoundError(f"Unable to find: {data_asset_id}")
-                elif response.status_code != 200:
-                    raise ConnectionError(
-                        f"There was an issue retrieving: {data_asset_id}"
-                    )
+            data_assets += run_capsule_config.data_assets
+        if input_data_assets is not None:
+            data_assets += input_data_assets
+        self.check_data_assets(data_assets)
 
         run_capsule_request = RunCapsuleRequest(
             capsule_id=run_capsule_config.capsule_id,
             pipeline_id=run_capsule_config.pipeline_id,
-            data_assets=run_capsule_config.data_assets,
+            data_assets=data_assets,
             parameters=run_capsule_config.run_parameters,
             version=run_capsule_config.capsule_version,
         )
@@ -461,6 +490,7 @@ class CodeOceanJob:
         responses = dict()
 
         # 1. register data assets (optional)
+        input_data_assets = None
         if self.job_config.register_config is not None:
             logger.info("Registering data asset")
             register_data_asset_response = (
@@ -468,20 +498,19 @@ class CodeOceanJob:
                     self.job_config.register_config
                 )
             )
-            data_assets_to_process = deepcopy(
-                self.job_config.run_capsule_config.data_assets
-            )
-            data_assets_to_process.append(
+            register_data_asset_response_json = \
+                register_data_asset_response.json()
+            input_data_assets = [
                 ComputationDataAsset(
-                    id=register_data_asset_response.json()["id"],
+                    id=register_data_asset_response_json["id"],
                     mount=self.job_config.register_config.mount,
                 )
-            )
+            ]
             data_asset_tags = self.job_config.register_config.tags
             data_asset_custom_metadata = deepcopy(
                 self.job_config.register_config.custom_metadata
             )
-            data_asset_name = register_data_asset_response["name"]
+            data_asset_name = register_data_asset_response_json["name"]
             responses["register"] = register_data_asset_response
         elif (
             self.job_config.run_capsule_config.data_assets is not None
@@ -505,7 +534,8 @@ class CodeOceanJob:
         # 2. run capsule
         logger.info("Running capsule")
         run_capsule_response = self._run_capsule(
-            self.job_config.run_capsule_config
+            self.job_config.run_capsule_config,
+            input_data_assets=input_data_assets
         )
         responses["run"] = run_capsule_response
 

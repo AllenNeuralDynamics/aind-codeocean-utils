@@ -77,7 +77,7 @@ class TestRegisterDataConfig(unittest.TestCase):
         self.assertFalse(r.public)
         self.assertTrue(r.keep_on_external_storage)
         self.assertEqual([], r.tags)
-        self.assertEqual(None, r.custom_metadata)
+        self.assertEqual({}, r.custom_metadata)
         self.assertFalse(r.viewable_to_everyone)
 
 
@@ -188,7 +188,7 @@ class TestCaptureResultConfig(unittest.TestCase):
         self.assertEqual(None, c.mount)
         self.assertEqual(None, c.asset_name)
         self.assertEqual([], c.tags)
-        self.assertEqual(None, c.custom_metadata)
+        self.assertEqual({}, c.custom_metadata)
         self.assertFalse(c.viewable_to_everyone)
 
     def test_check_tags(self):
