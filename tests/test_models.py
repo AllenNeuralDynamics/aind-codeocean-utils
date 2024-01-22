@@ -196,6 +196,13 @@ class TestCaptureResultConfig(unittest.TestCase):
         c = CaptureResultConfig(process_name="some_process", tags=None)
         self.assertEqual([], c.tags)
 
+    def test_check_custom_metadata(self):
+        """Tests check_custom_metadata validator"""
+        c = CaptureResultConfig(
+            process_name="some_process", custom_metadata=None
+        )
+        self.assertEqual({}, c.custom_metadata)
+
     def test_asset_name_validator(self):
         """Tests asset_name validator"""
         with self.assertRaises(ValueError) as e:

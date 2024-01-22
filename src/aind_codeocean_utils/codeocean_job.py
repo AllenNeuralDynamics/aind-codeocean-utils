@@ -165,7 +165,9 @@ class CodeOceanJob:
                 break_flag = True
         return response
 
-    def check_data_assets(self, data_assets: List[ComputationDataAsset]) -> bool:
+    def check_data_assets(
+        self, data_assets: List[ComputationDataAsset]
+    ) -> None:
         """
         Check if data assets exist.
 
@@ -174,15 +176,17 @@ class CodeOceanJob:
         data_assets : list
             List of data assets to check for.
 
-        Returns
-        -------
-        bool
-            Whether the data assets exist or not.
+        Raises
+        ------
+        FileNotFoundError
+            If a data asset is not found.
+        ConnectionError
+            If there is an issue retrieving a data asset.
         """
         for data_asset in data_assets:
-            assert isinstance(data_asset, ComputationDataAsset), (
-                "Data assets must be of type ComputationDataAsset"
-            )
+            assert isinstance(
+                data_asset, ComputationDataAsset
+            ), "Data assets must be of type ComputationDataAsset"
             data_asset_id = data_asset.id
             response = self.co_client.get_data_asset(data_asset_id)
             if response.status_code == 404:
@@ -191,12 +195,11 @@ class CodeOceanJob:
                 raise ConnectionError(
                     f"There was an issue retrieving: {data_asset_id}"
                 )
-        return True
 
     def _run_capsule(
         self,
         run_capsule_config: RunCapsuleConfig,
-        input_data_assets: List[ComputationDataAsset] = None
+        input_data_assets: List[ComputationDataAsset] = None,
     ) -> requests.Response:
         """
         Run a specified capsule with the given data assets. If the
@@ -498,8 +501,9 @@ class CodeOceanJob:
                     self.job_config.register_config
                 )
             )
-            register_data_asset_response_json = \
+            register_data_asset_response_json = (
                 register_data_asset_response.json()
+            )
             input_data_assets = [
                 ComputationDataAsset(
                     id=register_data_asset_response_json["id"],
@@ -535,7 +539,7 @@ class CodeOceanJob:
         logger.info("Running capsule")
         run_capsule_response = self._run_capsule(
             self.job_config.run_capsule_config,
-            input_data_assets=input_data_assets
+            input_data_assets=input_data_assets,
         )
         responses["run"] = run_capsule_response
 
