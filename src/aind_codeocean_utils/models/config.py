@@ -115,7 +115,7 @@ class RunCapsuleConfig(BaseModel):
         Coerces dictionaries into ComputationDataAsset type or emtpy list
         """
         if v is None:
-            return v
+            return []
         else:
             updated_list = []
             for item in v:

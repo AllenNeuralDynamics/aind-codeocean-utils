@@ -128,7 +128,7 @@ class TestRunCapsuleConfig(unittest.TestCase):
     def test_check_data_assets(self):
         """Tests check_data_assets"""
         r = RunCapsuleConfig(capsule_id="123-abc", data_assets=None)
-        self.assertIsNone(r.data_assets)
+        self.assertEqual([], r.data_assets)
 
     def test_pipeline_id_validator(self):
         """Tests pipeline_id validator"""
