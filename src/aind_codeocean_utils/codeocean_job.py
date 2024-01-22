@@ -422,7 +422,7 @@ class CodeOceanJob:
             asset_name = capture_result_config.asset_name
 
         if capture_result_config.mount is None:
-            mount = capture_result_config.asset_name
+            mount = asset_name
         else:
             mount = capture_result_config.mount
 
