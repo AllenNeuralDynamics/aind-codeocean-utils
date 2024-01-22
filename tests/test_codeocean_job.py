@@ -226,7 +226,10 @@ class TestCodeOceanJob(unittest.TestCase):
             codeocean_job._run_capsule(
                 run_capsule_config=(
                     self.basic_codeocean_job_config.run_capsule_config
-                )
+                ),
+                input_data_assets=[
+                    ComputationDataAsset(id="999888", mount="some_mount")
+                ],
             )
 
         self.assertEqual(
@@ -863,6 +866,29 @@ class TestCodeOceanJob(unittest.TestCase):
         mock_capture_result: MagicMock,
     ):
         """Tests run_job method"""
+        some_register_response = requests.Response()
+        some_register_response.status_code = 200
+        fake_register_id = "12345"
+        custom_metadata = (
+            self.basic_codeocean_job_config.register_config.custom_metadata
+        )
+        register_mount = self.basic_codeocean_job_config.register_config.mount
+        some_register_response.json = lambda: (
+            {
+                "created": 1666322134,
+                "description": "",
+                "files": 1364,
+                "id": fake_register_id,
+                "last_used": 0,
+                "name": "some_asset_name",
+                "state": "draft",
+                "custom_metadata": custom_metadata,
+                "tags": self.basic_codeocean_job_config.register_config.tags,
+                "type": "dataset",
+            }
+        )
+        mock_register_data.return_value = some_register_response
+
         some_run_response = requests.Response()
         some_run_response.status_code = 200
         fake_computation_id = "comp-abc-123"
@@ -886,9 +912,17 @@ class TestCodeOceanJob(unittest.TestCase):
         mock_register_data.assert_called_once_with(
             self.basic_codeocean_job_config.register_config
         )
+
         mock_run_capsule.assert_called_once_with(
-            self.basic_codeocean_job_config.run_capsule_config
+            self.basic_codeocean_job_config.run_capsule_config,
+            input_data_assets=[
+                ComputationDataAsset(
+                    id=fake_register_id,
+                    mount=register_mount,
+                )
+            ],
         )
+
         # the run_capsule will propagate the additional_tags and
         # additional_custom_metadata to the _capture_result method
         mock_capture_result.assert_called_once_with(
@@ -934,9 +968,6 @@ class TestCodeOceanJob(unittest.TestCase):
         )
         codeocean_job.run_job()
 
-        mock_run_capsule.assert_called_once_with(
-            self.no_reg_codeocean_job_config.run_capsule_config
-        )
         mock_capture_result.assert_called_once_with(
             computation_id=fake_computation_id,
             input_data_asset_name="some_asset_name",
@@ -1019,7 +1050,8 @@ class TestCodeOceanJob(unittest.TestCase):
         codeocean_job.run_job()
         mock_register_data.assert_not_called()
         mock_run_capsule.assert_called_once_with(
-            self.one_asset_codeocean_job_config.run_capsule_config
+            self.one_asset_codeocean_job_config.run_capsule_config,
+            input_data_assets=None,
         )
         # the run_capsule will propagate the additional_tags and
         # additional_custom_metadata to the _capture_result method
@@ -1090,7 +1122,8 @@ class TestCodeOceanJob(unittest.TestCase):
         codeocean_job.run_job()
         mock_register_data.assert_not_called()
         mock_run_capsule.assert_called_once_with(
-            self.none_vals_codeocean_job_config.run_capsule_config
+            self.none_vals_codeocean_job_config.run_capsule_config,
+            input_data_assets=None,
         )
         # the run_capsule will propagate the additional_tags and
         # additional_custom_metadata to the _capture_result method

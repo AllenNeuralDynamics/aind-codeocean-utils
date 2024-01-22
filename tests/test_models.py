@@ -77,7 +77,7 @@ class TestRegisterDataConfig(unittest.TestCase):
         self.assertFalse(r.public)
         self.assertTrue(r.keep_on_external_storage)
         self.assertEqual([], r.tags)
-        self.assertEqual(None, r.custom_metadata)
+        self.assertEqual({}, r.custom_metadata)
         self.assertFalse(r.viewable_to_everyone)
 
 
@@ -128,7 +128,7 @@ class TestRunCapsuleConfig(unittest.TestCase):
     def test_check_data_assets(self):
         """Tests check_data_assets"""
         r = RunCapsuleConfig(capsule_id="123-abc", data_assets=None)
-        self.assertIsNone(r.data_assets)
+        self.assertEqual([], r.data_assets)
 
     def test_pipeline_id_validator(self):
         """Tests pipeline_id validator"""
@@ -188,13 +188,20 @@ class TestCaptureResultConfig(unittest.TestCase):
         self.assertEqual(None, c.mount)
         self.assertEqual(None, c.asset_name)
         self.assertEqual([], c.tags)
-        self.assertEqual(None, c.custom_metadata)
+        self.assertEqual({}, c.custom_metadata)
         self.assertFalse(c.viewable_to_everyone)
 
     def test_check_tags(self):
         """Tests check_tags validator"""
         c = CaptureResultConfig(process_name="some_process", tags=None)
         self.assertEqual([], c.tags)
+
+    def test_check_custom_metadata(self):
+        """Tests check_custom_metadata validator"""
+        c = CaptureResultConfig(
+            process_name="some_process", custom_metadata=None
+        )
+        self.assertEqual({}, c.custom_metadata)
 
     def test_asset_name_validator(self):
         """Tests asset_name validator"""

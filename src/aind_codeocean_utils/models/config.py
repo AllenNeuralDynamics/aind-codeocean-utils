@@ -49,6 +49,14 @@ class RegisterDataConfig(BaseModel):
         else:
             return []
 
+    @field_validator("custom_metadata", mode="before")
+    def check_custom_metadata(cls, v: Optional[Dict]) -> Dict:
+        """Allows user to input None and converts them to empty collection"""
+        if v is not None:
+            return v
+        else:
+            return dict()
+
 
 class RunCapsuleConfig(BaseModel):
     """
@@ -104,10 +112,10 @@ class RunCapsuleConfig(BaseModel):
         cls, v: Optional[list]
     ) -> Optional[List[ComputationDataAsset]]:
         """
-        Coerces dictionaries into ComputationDataAsset type
+        Coerces dictionaries into ComputationDataAsset type or emtpy list
         """
         if v is None:
-            return None
+            return []
         else:
             updated_list = []
             for item in v:
@@ -137,8 +145,8 @@ class CaptureResultConfig(BaseModel):
     tags: List[str] = Field(
         default=[], description="The tags to use to describe the data asset."
     )
-    custom_metadata: Optional[Dict] = Field(
-        default=None,
+    custom_metadata: Dict = Field(
+        default=dict(),
         description="What key:value metadata tags to apply to the asset.",
     )
     viewable_to_everyone: bool = Field(
@@ -153,6 +161,14 @@ class CaptureResultConfig(BaseModel):
             return v
         else:
             return []
+
+    @field_validator("custom_metadata", mode="before")
+    def check_custom_metadata(cls, v: Optional[Dict]) -> Dict:
+        """Allows user to input None and converts them to empty collection"""
+        if v is not None:
+            return v
+        else:
+            return dict()
 
     @field_validator("asset_name", mode="after")
     def validate_asset_name(
