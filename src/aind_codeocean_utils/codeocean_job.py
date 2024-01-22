@@ -401,9 +401,12 @@ class CodeOceanJob:
                 for x in additional_tags
             ]
         custom_metadata = deepcopy(capture_result_config.custom_metadata)
+
+        # TODO: pull this 'data level' string from a controlled vocabulary
+        if "data level" in custom_metadata:
+            custom_metadata["data level"] = DataLevel.DERIVED.value
+
         if additional_custom_metadata is not None:
-            if "data level" in custom_metadata:
-                custom_metadata["data level"] = DataLevel.DERIVED.value
             custom_metadata.update(additional_custom_metadata)
 
         computation_source = Sources.Computation(
@@ -478,22 +481,26 @@ class CodeOceanJob:
             data_asset_custom_metadata = deepcopy(
                 self.job_config.register_config.custom_metadata
             )
+            data_asset_name = register_data_asset_response["name"]
             responses["register"] = register_data_asset_response
+        elif (
+            self.job_config.run_capsule_config.data_assets is not None
+            and len(self.job_config.run_capsule_config.data_assets) == 1
+        ):
+            data_asset = self.job_config.run_capsule_config.data_assets[0]
+            # TODO: Check status_code and handle other than 200
+            data_asset_response = self.co_client.get_data_asset(data_asset.id)
+            data_asset_json = data_asset_response.json()
+            data_asset_name = data_asset_json["name"]
+            data_asset_tags = data_asset_json["tags"]
+            # some of the older data assets don't have a custom_metadata field
+            data_asset_custom_metadata = data_asset_json.get("custom_metadata")
         else:
-            if len(self.job_config.run_capsule_config.data_assets) == 1:
-                data_asset = self.job_config.run_capsule_config.data_assets[0]
-                data_asset_json = self.co_client.get_data_asset(
-                    data_asset.id
-                ).json()
-                data_asset_name = data_asset_json["name"]
-                data_asset_tags = data_asset_json["tags"]
-                data_asset_custom_metadata = data_asset_json["custom_metadata"]
-            else:
-                # tags and custom_metadata are not propagated if multiple data
-                # assets are provided
-                data_asset_name = None
-                data_asset_tags = []
-                data_asset_custom_metadata = {}
+            # tags and custom_metadata are not propagated if multiple data
+            # assets are provided
+            data_asset_name = None
+            data_asset_tags = []
+            data_asset_custom_metadata = {}
 
         # 2. run capsule
         logger.info("Running capsule")
