@@ -428,18 +428,22 @@ class CodeOceanJob:
 
         tags = capture_result_config.tags.copy()
         if additional_tags is not None:
+            # skip duplicates and set data level to derived
             tags += [
                 DataLevel.DERIVED.value if x == DataLevel.RAW.value else x
                 for x in additional_tags
+                if x not in tags
             ]
         custom_metadata = deepcopy(capture_result_config.custom_metadata)
-
-        # TODO: pull this 'data level' string from a controlled vocabulary
-        if "data level" in custom_metadata:
-            custom_metadata["data level"] = DataLevel.DERIVED.value
-
         if additional_custom_metadata is not None:
             custom_metadata.update(additional_custom_metadata)
+
+        # TODO: pull this 'data level' string from a controlled vocabulary
+        if (
+            "data level" in custom_metadata
+            and custom_metadata["data level"] == DataLevel.RAW.value
+        ):
+            custom_metadata["data level"] = DataLevel.DERIVED.value
 
         computation_source = Sources.Computation(
             id=computation_id,

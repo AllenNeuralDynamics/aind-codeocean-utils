@@ -615,10 +615,52 @@ class TestCodeOceanJob(unittest.TestCase):
         some_update_permissions_response.status_code = 204
         mock_update_permissions.return_value = some_update_permissions_response
 
+        # check that duplicated tags and metadata are not added
         codeocean_job = CodeOceanJob(
             co_client=self.co_client,
             job_config=self.basic_codeocean_job_config,
         )
+        capture_tags = codeocean_job.job_config.capture_result_config.tags
+        capture_metadata = (
+            codeocean_job.job_config.capture_result_config.custom_metadata
+        )
+        capture_metadata_input = capture_metadata.copy()
+        capture_metadata_input.update({"data level": "raw"})
+        capture_metadata_output = capture_metadata.copy()
+        capture_metadata_output.update({"data level": "derived"})
+
+        codeocean_job._capture_result(
+            capture_result_config=(
+                codeocean_job.job_config.capture_result_config
+            ),
+            computation_id="124fq",
+            input_data_asset_name=None,
+            additional_tags=capture_tags + ["raw"],
+            additional_custom_metadata=capture_metadata_input,
+        )
+        mock_create_data_asset.assert_has_calls(
+            [
+                call(
+                    CreateDataAssetRequest(
+                        name="some_asset_name",
+                        tags=capture_tags + ["derived"],
+                        mount="some_mount",
+                        description=None,
+                        source=Source(
+                            aws=None,
+                            gcp=None,
+                            computation=Sources.Computation(
+                                id="124fq", path=None
+                            ),
+                        ),
+                        target=None,
+                        custom_metadata=capture_metadata_output,
+                    )
+                )
+            ]
+        )
+        mock_sleep.assert_not_called()
+
         codeocean_job._capture_result(
             capture_result_config=(
                 codeocean_job.job_config.capture_result_config
@@ -653,7 +695,6 @@ class TestCodeOceanJob(unittest.TestCase):
                 )
             ]
         )
-        mock_sleep.assert_not_called()
 
     @patch("time.sleep", return_value=None)
     @patch("aind_codeocean_api.codeocean.CodeOceanClient.create_data_asset")
