@@ -509,7 +509,9 @@ class CodeOceanJob:
                 register_data_asset_response.json()
             )
             if self.job_config.run_capsule_config.input_data_mount:
-                input_data_mount = self.job_config.run_capsule_config.input_data_mount
+                input_data_mount = (
+                    self.job_config.run_capsule_config.input_data_mount
+                )
             else:
                 input_data_mount = self.job_config.register_config.mount
             input_data_assets = [
