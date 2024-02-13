@@ -73,7 +73,14 @@ class RunCapsuleConfig(BaseModel):
     )
     data_assets: Optional[List[ComputationDataAsset]] = Field(
         default=None,
-        description=("List of data assets for the capsule to run against. "),
+        description="List of data assets for the capsule to run against.",
+    )
+    input_data_mount: Optional[str] = Field(
+        default=None,
+        description=(
+            "The mount point for the newly registered input data asset, "
+            "if different than the asset mount name."
+        ),
     )
     run_parameters: Optional[List] = Field(
         default=None, description="The parameters to pass to the capsule."

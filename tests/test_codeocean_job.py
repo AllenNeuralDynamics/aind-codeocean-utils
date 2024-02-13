@@ -56,6 +56,19 @@ class TestCodeOceanJob(unittest.TestCase):
             capsule_version=3,
             timeout_seconds=10000,
         )
+        basic_run_capsule_input_mount_config = RunCapsuleConfig(
+            capsule_id="123-abc",
+            pipeline_id=None,
+            data_assets=[
+                ComputationDataAsset(id="999888", mount="some_mount"),
+                {"id": "12345", "mount": "some_mount_2"},
+            ],
+            input_data_mount="custom-mount",
+            run_parameters=["param1", "param2"],
+            pause_interval=400,
+            capsule_version=3,
+            timeout_seconds=10000,
+        )
         basic_run_capsule_one_asset_config = RunCapsuleConfig(
             capsule_id=None,
             pipeline_id="123-abc",
@@ -110,6 +123,10 @@ class TestCodeOceanJob(unittest.TestCase):
             register_config=basic_register_data_config,
             run_capsule_config=basic_run_capsule_config,
             capture_result_config=basic_capture_result_config,
+        )
+        cls.basic_input_mount_codeocean_job_config = CodeOceanJobConfig(
+            register_config=basic_register_data_config,
+            run_capsule_config=basic_run_capsule_input_mount_config,
         )
         cls.none_vals_codeocean_job_config = CodeOceanJobConfig(
             register_config=basic_register_data_config,
@@ -978,6 +995,76 @@ class TestCodeOceanJob(unittest.TestCase):
             capture_result_config=(
                 self.basic_codeocean_job_config.capture_result_config
             ),
+        )
+
+    @patch(
+        "aind_codeocean_utils.codeocean_job.CodeOceanJob"
+        "._register_data_and_update_permissions"
+    )
+    @patch("aind_codeocean_utils.codeocean_job.CodeOceanJob._run_capsule")
+    def test_run_job_input_data(
+        self,
+        mock_run_capsule: MagicMock,
+        mock_register_data: MagicMock,
+    ):
+        """Tests run_job method"""
+        some_register_response = requests.Response()
+        some_register_response.status_code = 200
+        fake_register_id = "12345"
+        custom_metadata = (
+            self.basic_codeocean_job_config.register_config.custom_metadata
+        )
+        some_register_response.json = lambda: (
+            {
+                "created": 1666322134,
+                "description": "",
+                "files": 1364,
+                "id": fake_register_id,
+                "last_used": 0,
+                "name": "some_asset_name",
+                "state": "draft",
+                "custom_metadata": custom_metadata,
+                "tags": self.basic_codeocean_job_config.register_config.tags,
+                "type": "dataset",
+            }
+        )
+        mock_register_data.return_value = some_register_response
+
+        some_run_response = requests.Response()
+        some_run_response.status_code = 200
+        fake_computation_id = "comp-abc-123"
+        some_run_response.json = lambda: (
+            {
+                "created": 1646943238,
+                "has_results": False,
+                "id": fake_computation_id,
+                "name": "Run 6943238",
+                "run_time": 1,
+                "state": "initializing",
+            }
+        )
+        mock_run_capsule.return_value = some_run_response
+
+        codeocean_job = CodeOceanJob(
+            co_client=self.co_client,
+            job_config=self.basic_input_mount_codeocean_job_config,
+        )
+        codeocean_job.run_job()
+        mock_register_data.assert_called_once_with(
+            self.basic_input_mount_codeocean_job_config.register_config
+        )
+
+        run_capsule_config = (
+            self.basic_input_mount_codeocean_job_config.run_capsule_config
+        )
+        mock_run_capsule.assert_called_once_with(
+            self.basic_input_mount_codeocean_job_config.run_capsule_config,
+            input_data_assets=[
+                ComputationDataAsset(
+                    id=fake_register_id,
+                    mount=run_capsule_config.input_data_mount,
+                )
+            ],
         )
 
     @patch("aind_codeocean_utils.codeocean_job.CodeOceanJob._capture_result")

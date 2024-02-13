@@ -3,7 +3,7 @@ import logging
 import time
 from copy import deepcopy
 from datetime import datetime
-from typing import Optional, List
+from typing import List, Optional
 
 import requests
 from aind_codeocean_api.codeocean import CodeOceanClient
@@ -508,10 +508,16 @@ class CodeOceanJob:
             register_data_asset_response_json = (
                 register_data_asset_response.json()
             )
+            if self.job_config.run_capsule_config.input_data_mount:
+                input_data_mount = (
+                    self.job_config.run_capsule_config.input_data_mount
+                )
+            else:
+                input_data_mount = self.job_config.register_config.mount
             input_data_assets = [
                 ComputationDataAsset(
                     id=register_data_asset_response_json["id"],
-                    mount=self.job_config.register_config.mount,
+                    mount=input_data_mount,
                 )
             ]
             data_asset_tags = self.job_config.register_config.tags
