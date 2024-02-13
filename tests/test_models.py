@@ -12,6 +12,7 @@ from aind_codeocean_utils.models.config import (
     RegisterDataConfig,
     RunCapsuleConfig,
 )
+from tests import PYD_VERSION
 
 
 class TestRegisterDataConfig(unittest.TestCase):
@@ -144,7 +145,7 @@ class TestRunCapsuleConfig(unittest.TestCase):
             "  Value error, Either capsule_id or pipeline must be set."
             " [type=value_error, input_value=None, input_type=NoneType]\n"
             "    For further information visit"
-            " https://errors.pydantic.dev/2.6/v/value_error"
+            f" https://errors.pydantic.dev/{PYD_VERSION}/v/value_error"
         )
 
         expected_exception2 = (
@@ -153,7 +154,7 @@ class TestRunCapsuleConfig(unittest.TestCase):
             "  Value error, Only one of capsule_id or pipeline_id can be set."
             " [type=value_error, input_value='456', input_type=str]\n"
             "    For further information visit"
-            " https://errors.pydantic.dev/2.6/v/value_error"
+            f" https://errors.pydantic.dev/{PYD_VERSION}/v/value_error"
         )
         self.assertEqual(expected_exception1, repr(e1.exception))
         self.assertEqual(expected_exception2, repr(e2.exception))
@@ -214,7 +215,7 @@ class TestCaptureResultConfig(unittest.TestCase):
             "  Value error, Either asset_name or process_name must be provided"
             " [type=value_error, input_value=None, input_type=NoneType]\n"
             "    For further information visit"
-            " https://errors.pydantic.dev/2.6/v/value_error"
+            f" https://errors.pydantic.dev/{PYD_VERSION}/v/value_error"
         )
         self.assertEqual(expected_exception, repr(e.exception))
 

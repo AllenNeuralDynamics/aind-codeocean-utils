@@ -3,7 +3,7 @@ import logging
 import time
 from copy import deepcopy
 from datetime import datetime
-from typing import Optional, List
+from typing import List, Optional
 
 import requests
 from aind_codeocean_api.codeocean import CodeOceanClient
