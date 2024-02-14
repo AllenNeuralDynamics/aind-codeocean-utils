@@ -11,12 +11,13 @@ class ArchiveDeleteJob:
         self.client = co_client
 
     def find_archived_data_assets(self, minimum_age: timedelta):
-        pass
+        assets = self.client.search_all_data_assets(archived=True).json()
+        
 
-if __name__ == __main__:
+if __name__ == "__main__":
     from aind_codeocean_api.credentials import CodeOceanCredentials
     creds = CodeOceanCredentials()
-    client = CodeOceanClient.from_credentials(cred)
+    client = CodeOceanClient.from_credentials(creds)
     j = ArchiveDeleteJob(client)
 
     jobs = j.find_archived_data_assets(minimum_age=timedelta(days=30))
