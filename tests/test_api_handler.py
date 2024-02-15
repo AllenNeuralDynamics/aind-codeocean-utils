@@ -295,7 +295,7 @@ class TestAPIHandler(unittest.TestCase):
     )
     @patch("logging.debug")
     @patch("logging.info")
-    def test_update_tags_dryrun(
+    def test_find_archived_data_assets_to_delete(
         self,
         mock_log_info: MagicMock,
         mock_log_debug: MagicMock,

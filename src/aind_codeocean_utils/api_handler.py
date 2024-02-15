@@ -146,13 +146,13 @@ class APIHandler:
             logging.info(f"name: {asset['name']}, type: {asset['type']}")
 
         logging.info(
-            f"{len(assets_to_delete)}/{len(assets)} archived data assets can be deleted"
+            f"{len(assets_to_delete)}/{len(assets)} archived assets deletable"
         )
         logging.info(
-            f"internal: {internal_count} data assets, {internal_size / 1e9} GBs"
+            f"internal: {internal_count} assets, {internal_size / 1e9} GBs"
         )
         logging.info(
-            f"external: {external_count} data assets, {external_size / 1e9} GBs"
+            f"external: {external_count} assets, {external_size / 1e9} GBs"
         )
 
         return assets_to_delete
