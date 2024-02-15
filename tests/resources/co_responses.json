@@ -141,7 +141,26 @@
           "test"
         ],
         "type": "dataset"
-      }
+      },
+      {
+        "created": 1685645105, 
+        "description": "", 
+        "files": 1540, 
+        "id": "fa312ea4-6068-4a4e-a40b-e8c73c9660d0", 
+        "last_used": 0, 
+        "name": "multiplane-ophys_438912_2019-04-17_15-19-14_processed_2024-02-14_19-44-46", 
+        "provenance": {
+          "capsule": "36173b3e-2e7b-4510-ad51-8b7e90be08bc", 
+          "commit": "1ad2c544ceb4bc2da208f78c8786f5d107a29d6d", 
+          "data_assets": ["ca44d463-01f6-4567-9167-9dc063f0dbbb"], 
+          "docker_image": "", 
+          "run_script": "code/run"
+        }, 
+        "size": 535129947980, 
+        "state": "ready", 
+        "tags": [ "multiplane-ophys", "pipeline-v3.0" ], 
+        "type": "result"
+      }  
     ]
   }
 }
