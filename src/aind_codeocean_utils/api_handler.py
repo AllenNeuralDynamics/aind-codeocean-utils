@@ -103,7 +103,7 @@ class APIHandler:
                 )
                 logging.info(response.json())
 
-      def find_archived_data_assets_to_delete(self, keep_after: datetime):
+    def find_archived_data_assets_to_delete(self, keep_after: datetime):
         """find archived data assets that are safe to delete"""
 
         assets = self.client.search_all_data_assets(archived=True).json()[
@@ -143,8 +143,12 @@ class APIHandler:
             logger.info(f"{asset['name']} {asset['type']}")
 
         logger.info(f"{len(assets)} archived data assets can be deleted")
-        logger.info(f"internal: {internal_count} data assets, {internal_size / 1e9} GBs")
-        logger.info(f"external: {external_count} data assets, {external_size / 1e9} GBs")
+        logger.info(
+            f"internal: {internal_count} data assets, {internal_size / 1e9} GBs"
+        )
+        logger.info(
+            f"external: {external_count} data assets, {external_size / 1e9} GBs"
+        )
 
         return assets_to_delete
 
