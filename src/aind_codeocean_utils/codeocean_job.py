@@ -20,7 +20,6 @@ from aind_data_schema.core.data_description import (
     DataLevel,
     datetime_to_name_string,
 )
-
 from aind_codeocean_utils.models.config import (
     CaptureResultConfig,
     CodeOceanJobConfig,
@@ -499,7 +498,7 @@ class CodeOceanJob:
         # 1. register data assets (optional)
         input_data_assets = None
         if self.job_config.register_config is not None:
-            logger.info("Registering data asset")
+            logger.info(f"Registering data asset {self.job_config.register_config.prefix}")
             register_data_asset_response = (
                 self._register_data_and_update_permissions(
                     self.job_config.register_config
