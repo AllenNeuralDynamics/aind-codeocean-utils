@@ -1,22 +1,31 @@
 """ utility methods for managing data assets and their relationship with S3 """
-
-from aind_codeocean_api.codeocean import CodeOceanClient
 from datetime import datetime
 import logging
 import boto3
 import botocore
-from botocore.errorfactory import ClientError
 
 logger = logging.getLogger(__name__)
 
 
 class DataManager:
+    """
+    This class containes utility tools to manafe data assets and their relationship with S3
+    """
     def __init__(self, client):
+        """
+        DataManager constructor
+
+        Parameters
+        ----------
+        client : aind_codeocean_utils.client.Client
+            The client to use for interacting with the Code Ocean API.
+        """
         self.client = client
         self._s3 = None
 
     @property
     def s3(self):
+        """Return a boto3 s3 client."""
         if self._s3 is None:
             self._s3 = boto3.client("s3")
         return self._s3
@@ -75,11 +84,15 @@ class DataManager:
     def find_nonexistent_external_data_assets(self):
         """find external data assets that do not exist"""
 
-        for asset in find_external_assets(client):
+        for asset in self.find_external_assets(self.client):
             sb = asset["sourceBucket"]
 
             try:
-                exists = bucket_folder_exists(s3, sb["bucket"], sb["prefix"])
+                exists = self.bucket_folder_exists(
+                    self._s3,
+                    sb["bucket"],
+                    sb["prefix"]
+                )
                 logger.info(f"{sb['bucket']} {sb['prefix']} exists? {exists}")
                 if not exists:
                     yield asset
