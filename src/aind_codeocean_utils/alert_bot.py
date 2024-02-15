@@ -1,12 +1,20 @@
+"""Module with Alert Bot for notifications on MS Teams"""
 import requests
 from typing import Optional
-
 
 
 class AlertBot:
     """Class to handle sending alerts and messages in MS Teams."""
 
     def __init__(self, url: str):
+        """
+        AlertBot constructor
+
+        Parameters
+        ----------
+        url : str
+          The url to send the message to
+        """
         self.url = url
 
     @staticmethod
@@ -29,7 +37,12 @@ class AlertBot:
 
         """
         body: list = [
-            {"type": "TextBlock", "size": "Medium", "weight": "Bolder", "text": message}
+            {
+                "type": "TextBlock",
+                "size": "Medium",
+                "weight": "Bolder",
+                "text": message,
+            }
         ]
         if extra_text is not None:
             body.append({"type": "TextBlock", "text": extra_text})
@@ -42,7 +55,8 @@ class AlertBot:
                         "type": "AdaptiveCard",
                         "body": body,
                         "$schema": (
-                            "http://adaptivecards.io/schemas/adaptive-card.json"
+                            "http://adaptivecards.io/schemas/"
+                            "adaptive-card.json"
                         ),
                         "version": "1.0",
                     },

@@ -29,8 +29,12 @@ class TestAlertBot(unittest.TestCase):
         alert_bot.send_message(message="Test Message")
         contents0 = alert_bot._create_body_text("Test Message", None)
         mocked_post.assert_called_once_with("testing_url.com", json=contents0)
-        alert_bot.send_message(message="Another Message", extra_text="With extra text")
-        contents1 = alert_bot._create_body_text("Another Message", "With extra text")
+        alert_bot.send_message(
+            message="Another Message", extra_text="With extra text"
+        )
+        contents1 = alert_bot._create_body_text(
+            "Another Message", "With extra text"
+        )
         mocked_post.assert_has_calls(
             [
                 call("testing_url.com", json=contents0),

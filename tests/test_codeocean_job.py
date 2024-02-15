@@ -15,7 +15,6 @@ from aind_codeocean_api.models.data_assets_requests import (
 )
 
 from aind_codeocean_utils.codeocean_job import CodeOceanJob
-from aind_codeocean_utils.alert_bot import AlertBot
 from aind_codeocean_utils.models.config import (
     CaptureResultConfig,
     CodeOceanJobConfig,
