@@ -9,7 +9,8 @@ logger = logging.getLogger(__name__)
 
 class DataManager:
     """
-    This class containes utility tools to manafe data assets and their relationship with S3
+    This class containes utility tools to manafe data assets 
+    and their relationship with S3
     """
     def __init__(self, client):
         """
