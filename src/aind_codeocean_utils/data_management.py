@@ -1,3 +1,5 @@
+""" utility methods for managing data assets and their relationship with S3 """
+
 from aind_codeocean_api.codeocean import CodeOceanClient
 from datetime import datetime
 import logging
