@@ -5,6 +5,8 @@ import boto3
 import botocore
 from botocore.errorfactory import ClientError
 
+logger = logging.getLogger(__name__)
+
 
 def find_archived_data_assets_to_delete(client, keep_after: datetime):
     """find archived data assets that are safe to delete"""
@@ -36,11 +38,11 @@ def find_archived_data_assets_to_delete(client, keep_after: datetime):
             external_size += size
         else:
             internal_size += size
-        logging.info(f"{asset['name']} {asset['type']}")
+        logger.info(f"{asset['name']} {asset['type']}")
 
-    logging.info(f"{len(assets)} archived data assets can be deleted")
-    logging.info(f"{internal_size / 1e9} GBs internal")
-    logging.info(f"{external_size / 1e9} GBs external")
+    logger.info(f"{len(assets)} archived data assets can be deleted")
+    logger.info(f"{internal_size / 1e9} GBs internal")
+    logger.info(f"{external_size / 1e9} GBs external")
 
     return assets_to_delete
 
@@ -65,11 +67,11 @@ def find_nonexistant_external_data_assets(client):
 
         try:
             exists = bucket_folder_exists(s3, sb["bucket"], sb["prefix"])
-            logging.info(f"{sb['bucket']} {sb['prefix']} {exists}")
+            logger.info(f"{sb['bucket']} {sb['prefix']} exists? {exists}")
             if not exists:
                 yield asset
         except botocore.exceptions.ClientError as e:
-            logging.warning(e)
+            logger.warning(e)
 
 
 def bucket_folder_exists(s3, bucket, path) -> bool:
@@ -80,15 +82,3 @@ def bucket_folder_exists(s3, bucket, path) -> bool:
         Bucket=bucket, Prefix=path, Delimiter="/", MaxKeys=1
     )
     return "CommonPrefixes" in resp
-
-
-if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
-    from aind_codeocean_api.credentials import CodeOceanCredentials
-    from datetime import timedelta
-
-    creds = CodeOceanCredentials()
-    client = CodeOceanClient.from_credentials(creds)
-
-    # assets_to_delete = find_archivable_data_assets(client, keep_after=datetime.now() - timedelta(days=30))
-    find_nonexistant_external_assets(client)
