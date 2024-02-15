@@ -2,6 +2,9 @@
 
 import logging
 from typing import Dict, Iterator, List, Optional
+from datetime import datetime
+import boto3
+import botocore
 
 from aind_codeocean_api.codeocean import CodeOceanClient
 
@@ -106,7 +109,7 @@ class APIHandler:
     def find_archived_data_assets_to_delete(self, keep_after: datetime):
         """find archived data assets that are safe to delete"""
 
-        assets = self.client.search_all_data_assets(archived=True).json()[
+        assets = self.co_client.search_all_data_assets(archived=True).json()[
             "results"
         ]
 
@@ -140,24 +143,26 @@ class APIHandler:
             else:
                 internal_count += 1
                 internal_size += size
-            logger.info(f"{asset['name']} {asset['type']}")
+            logging.info(f"name: {asset['name']}, type: {asset['type']}")
 
-        logger.info(f"{len(assets)} archived data assets can be deleted")
-        logger.info(
+        logging.info(
+            f"{len(assets_to_delete)}/{len(assets)} archived data assets can be deleted"
+        )
+        logging.info(
             f"internal: {internal_count} data assets, {internal_size / 1e9} GBs"
         )
-        logger.info(
+        logging.info(
             f"external: {external_count} data assets, {external_size / 1e9} GBs"
         )
 
         return assets_to_delete
 
-    def find_external_assets(self):
+    def find_external_data_assets(self):
         """find all external data assets"""
 
-        assets = self.client.search_all_data_assets(type="dataset").json()[
-            "results"
-        ]
+        response = self.co_client.search_all_data_assets(type="dataset")
+        assets = response.json()["results"]
+
         for asset in assets:
             bucket = asset.get("sourceBucket", {}).get("bucket", None)
             if bucket:
@@ -166,18 +171,16 @@ class APIHandler:
     def find_nonexistent_external_data_assets(self):
         """find external data assets that do not exist"""
 
-        for asset in self.find_external_assets(self.client):
+        for asset in self.find_external_data_assets():
             sb = asset["sourceBucket"]
 
             try:
-                exists = self.bucket_prefix_exists(
-                    self._s3, sb["bucket"], sb["prefix"]
-                )
-                logger.info(f"{sb['bucket']} {sb['prefix']} exists? {exists}")
+                exists = self.bucket_prefix_exists(sb["bucket"], sb["prefix"])
+                logging.info(f"{sb['bucket']} {sb['prefix']} exists? {exists}")
                 if not exists:
                     yield asset
             except botocore.exceptions.ClientError as e:
-                logger.warning(e)
+                logging.warning(e)
 
     def bucket_prefix_exists(self, bucket: str, prefix: str) -> bool:
         """Check if prefix exists. Prefix could be empty."""

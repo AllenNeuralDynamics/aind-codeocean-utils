@@ -5,6 +5,7 @@ import os
 import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, call, patch
+import datetime
 
 from aind_codeocean_api.codeocean import CodeOceanClient
 from requests import Response
@@ -257,6 +258,59 @@ class TestAPIHandler(unittest.TestCase):
         ]
         mock_log_debug.assert_has_calls(expected_debug_calls)
         mock_log_info.assert_called()
+
+    @patch("boto3.client")
+    def test_bucket_prefix_exists(self, mock_s3: MagicMock):
+        self.api_handler.s3.list_objects.return_value = {}
+
+        resp = self.api_handler.bucket_prefix_exists(
+            bucket="some-bucket", prefix="some-prefix"
+        )
+
+        assert resp is False
+
+        self.api_handler.s3.list_objects.return_value = {"CommonPrefixes": []}
+
+        resp = self.api_handler.bucket_prefix_exists(
+            bucket="some-bucket", prefix="some-prefix"
+        )
+
+        assert resp
+
+    @patch(
+        "aind_codeocean_api.codeocean.CodeOceanClient.search_all_data_assets"
+    )
+    def test_find_external_assets(self, mock_get: MagicMock):
+        mock_get.return_value = (
+            self.mock_search_all_data_assets_success_response
+        )
+        resp = self.api_handler.find_external_data_assets()
+        assert len(list(resp)) == 2
+
+        resp = self.api_handler.find_nonexistent_external_data_assets()
+        assert len(list(resp)) == 0
+
+    @patch(
+        "aind_codeocean_api.codeocean.CodeOceanClient.search_all_data_assets"
+    )
+    @patch("logging.debug")
+    @patch("logging.info")
+    def test_update_tags_dryrun(
+        self,
+        mock_log_info: MagicMock,
+        mock_log_debug: MagicMock,
+        mock_get: MagicMock,
+    ):
+        mock_get.return_value = (
+            self.mock_search_all_data_assets_success_response
+        )
+
+        keep_after = datetime.datetime(year=2023, month=9, day=1)
+        resp = self.api_handler.find_archived_data_assets_to_delete(
+            keep_after=keep_after
+        )
+
+        assert len(resp) == 5
 
 
 if __name__ == "__main__":
