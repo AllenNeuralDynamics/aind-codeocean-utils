@@ -170,7 +170,7 @@ class APIHandler:
             sb = asset["sourceBucket"]
 
             try:
-                exists = self.bucket_folder_exists(
+                exists = self.bucket_prefix_exists(
                     self._s3, sb["bucket"], sb["prefix"]
                 )
                 logger.info(f"{sb['bucket']} {sb['prefix']} exists? {exists}")
@@ -179,11 +179,11 @@ class APIHandler:
             except botocore.exceptions.ClientError as e:
                 logger.warning(e)
 
-    def bucket_folder_exists(self, bucket, path) -> bool:
-        """Check if folder exists. Folder could be empty."""
+    def bucket_prefix_exists(self, bucket: str, prefix: str) -> bool:
+        """Check if prefix exists. Prefix could be empty."""
 
-        path = path.rstrip("/")
+        prefix = prefix.rstrip("/")
         resp = self.s3.list_objects(
-            Bucket=bucket, Prefix=path, Delimiter="/", MaxKeys=1
+            Bucket=bucket, Prefix=prefix, Delimiter="/", MaxKeys=1
         )
         return "CommonPrefixes" in resp
