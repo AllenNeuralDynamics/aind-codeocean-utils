@@ -1,4 +1,5 @@
 """Module with generic Code Ocean job"""
+
 import logging
 import time
 from copy import deepcopy

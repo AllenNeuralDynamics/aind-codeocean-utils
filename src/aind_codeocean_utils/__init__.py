@@ -1,4 +1,5 @@
 """Library with helpful methods for making changes to the code ocean index."""
+
 __version__ = "0.1.2"
 
 # Set default logging handler to avoid "No handler found" warnings.
