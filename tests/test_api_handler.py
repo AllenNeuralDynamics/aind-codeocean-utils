@@ -116,13 +116,16 @@ class TestAPIHandler(unittest.TestCase):
             {
                 "data_asset_id": "63f2d2de-4af8-4397-94ab-9484c8e8c847",
                 "new_name": (
-                    "ecephys_622155_2022-05-31_15-29-16" "_2023-06-01_14-45-05"
+                    "ecephys_622155_2022-05-31_15-29-16_2023-06-01_14-45-05"
                 ),
                 "new_tags": {"new_tag"},
             },
             {
                 "data_asset_id": "fa312ea4-6068-4a4e-a40b-e8c73c9660d0",
-                "new_name": "multiplane-ophys_438912_2019-04-17_15-19-14_processed_2024-02-14_19-44-46",
+                "new_name": (
+                    "multiplane-ophys_438912_2019-04-17_15-19-14"
+                    "_processed_2024-02-14_19-44-46"
+                ),
                 "new_tags": {"pipeline-v3.0", "multiplane-ophys", "new_tag"},
             },
         ]
