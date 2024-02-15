@@ -6,6 +6,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, call, patch
 import datetime
+import botocore
 
 from aind_codeocean_api.codeocean import CodeOceanClient
 from requests import Response
@@ -115,16 +116,15 @@ class TestAPIHandler(unittest.TestCase):
             {
                 "data_asset_id": "63f2d2de-4af8-4397-94ab-9484c8e8c847",
                 "new_name": (
-                    "ecephys_622155_2022-05-31_15-29-16" 
-                    "_2023-06-01_14-45-05"
+                    "ecephys_622155_2022-05-31_15-29-16" "_2023-06-01_14-45-05"
                 ),
                 "new_tags": {"new_tag"},
             },
             {
-                'data_asset_id': 'fa312ea4-6068-4a4e-a40b-e8c73c9660d0', 
-                'new_name': 'multiplane-ophys_438912_2019-04-17_15-19-14_processed_2024-02-14_19-44-46', 
-                'new_tags': {'pipeline-v3.0', 'multiplane-ophys', 'new_tag'}
-            }
+                "data_asset_id": "fa312ea4-6068-4a4e-a40b-e8c73c9660d0",
+                "new_name": "multiplane-ophys_438912_2019-04-17_15-19-14_processed_2024-02-14_19-44-46",
+                "new_tags": {"pipeline-v3.0", "multiplane-ophys", "new_tag"},
+            },
         ]
         actual_calls = [c.kwargs for c in mock_update.mock_calls]
         for row in actual_calls:
@@ -286,15 +286,28 @@ class TestAPIHandler(unittest.TestCase):
     @patch(
         "aind_codeocean_api.codeocean.CodeOceanClient.search_all_data_assets"
     )
-    def test_find_external_assets(self, mock_get: MagicMock):
+    @patch("boto3.client")
+    @patch("logging.warning")
+    def test_find_external_assets(
+        self, mock_log_warn: MagicMock, mock_s3: MagicMock, mock_get: MagicMock
+    ):
         mock_get.return_value = (
             self.mock_search_all_data_assets_success_response
         )
+        self.api_handler.s3.list_objects.side_effect = [
+            {},
+            botocore.exceptions.ClientError(
+                {"Error": {"Code": 1, "Message": "foo"}}, "bar"
+            ),
+            {"CommonPrefixes": 1},
+            {"CommonPrefixes": 2},
+        ]
+
         resp = self.api_handler.find_external_data_assets()
         assert len(list(resp)) == 2
 
         resp = self.api_handler.find_nonexistent_external_data_assets()
-        assert len(list(resp)) == 0
+        assert len(list(resp)) == 1
 
     @patch(
         "aind_codeocean_api.codeocean.CodeOceanClient.search_all_data_assets"
@@ -307,6 +320,7 @@ class TestAPIHandler(unittest.TestCase):
         mock_log_debug: MagicMock,
         mock_get: MagicMock,
     ):
+
         mock_get.return_value = (
             self.mock_search_all_data_assets_success_response
         )
