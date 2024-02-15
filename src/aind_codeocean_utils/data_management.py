@@ -9,9 +9,10 @@ logger = logging.getLogger(__name__)
 
 class DataManager:
     """
-    This class containes utility tools to manafe data assets 
+    This class containes utility tools to manafe data assets
     and their relationship with S3
     """
+
     def __init__(self, client):
         """
         DataManager constructor
@@ -90,9 +91,7 @@ class DataManager:
 
             try:
                 exists = self.bucket_folder_exists(
-                    self._s3,
-                    sb["bucket"],
-                    sb["prefix"]
+                    self._s3, sb["bucket"], sb["prefix"]
                 )
                 logger.info(f"{sb['bucket']} {sb['prefix']} exists? {exists}")
                 if not exists:
