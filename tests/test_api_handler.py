@@ -270,6 +270,8 @@ class TestAPIHandler(unittest.TestCase):
 
     @patch("boto3.client")
     def test_bucket_prefix_exists(self, mock_s3: MagicMock):
+        """boto tests"""
+
         self.api_handler.s3.list_objects.return_value = {}
 
         resp = self.api_handler.bucket_prefix_exists(
@@ -294,6 +296,7 @@ class TestAPIHandler(unittest.TestCase):
     def test_find_external_assets(
         self, mock_log_warn: MagicMock, mock_s3: MagicMock, mock_get: MagicMock
     ):
+        """tests related to external assets"""
         mock_get.return_value = (
             self.mock_search_all_data_assets_success_response
         )
@@ -323,6 +326,7 @@ class TestAPIHandler(unittest.TestCase):
         mock_log_debug: MagicMock,
         mock_get: MagicMock,
     ):
+        """run archiving tests"""
 
         mock_get.return_value = (
             self.mock_search_all_data_assets_success_response
