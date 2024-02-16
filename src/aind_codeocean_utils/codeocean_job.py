@@ -537,7 +537,7 @@ class CodeOceanJob:
             data_asset_response = self.co_client.get_data_asset(data_asset.id)
             data_asset_json = data_asset_response.json()
             data_asset_name = data_asset_json["name"]
-            data_asset_tags = data_asset_json["tags"]
+            data_asset_tags = data_asset_json.get("tags")
             # some of the older data assets don't have a custom_metadata field
             data_asset_custom_metadata = data_asset_json.get("custom_metadata")
         else:
