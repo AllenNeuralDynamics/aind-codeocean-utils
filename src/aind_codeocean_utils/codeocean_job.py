@@ -256,6 +256,8 @@ class CodeOceanJob:
         # TODO: Handle case of bad response from code ocean
         run_capsule_response = self.co_client.run_capsule(run_capsule_request)
         run_capsule_response_json = run_capsule_response.json()
+        print(f"Status code: {run_capsule_response.status_code}")
+        print(f"Response: {run_capsule_response_json}")
         computation_id = run_capsule_response_json["id"]
 
         # TODO: We may need to clean up the loop termination logic
