@@ -1,12 +1,11 @@
 """Example test template."""
 
+import datetime
 import json
 import os
 import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, call, patch
-import datetime
-import botocore
 
 from aind_codeocean_api.codeocean import CodeOceanClient
 from requests import Response
@@ -37,11 +36,15 @@ class TestAPIHandler(unittest.TestCase):
         mock_co_client = CodeOceanClient(
             domain=co_mock_domain, token=co_mock_token
         )
+        mock_s3_client = MagicMock()
         cls.mock_search_all_data_assets_success_response = (
             mock_search_all_data_assets_success_response
         )
         cls.api_handler = APIHandler(co_client=mock_co_client)
         cls.api_handler_dry = APIHandler(co_client=mock_co_client, dryrun=True)
+        cls.api_handler_s3 = APIHandler(
+            co_client=mock_co_client, s3=mock_s3_client
+        )
 
     @patch(
         "aind_codeocean_api.codeocean.CodeOceanClient.search_all_data_assets"
@@ -268,52 +271,59 @@ class TestAPIHandler(unittest.TestCase):
         mock_log_debug.assert_has_calls(expected_debug_calls)
         mock_log_info.assert_called()
 
-    @patch("boto3.client")
-    def test_bucket_prefix_exists(self, mock_s3: MagicMock):
-        """boto tests"""
+    def test_bucket_prefix_exists(self):
+        """Tests bucket_prefix_exists evaluation from boto response."""
 
-        self.api_handler.s3.list_objects.return_value = {}
-
-        resp = self.api_handler.bucket_prefix_exists(
+        # Mock return values for list objects
+        self.api_handler_s3.s3.list_objects.return_value = {}
+        resp = self.api_handler_s3._bucket_prefix_exists(
             bucket="some-bucket", prefix="some-prefix"
         )
-
-        assert resp is False
-
-        self.api_handler.s3.list_objects.return_value = {"CommonPrefixes": []}
-
-        resp = self.api_handler.bucket_prefix_exists(
+        self.assertFalse(resp)
+        self.api_handler_s3.s3.list_objects.return_value = {
+            "CommonPrefixes": []
+        }
+        resp = self.api_handler_s3._bucket_prefix_exists(
             bucket="some-bucket", prefix="some-prefix"
         )
-
-        assert resp
+        self.assertTrue(resp)
 
     @patch(
         "aind_codeocean_api.codeocean.CodeOceanClient.search_all_data_assets"
     )
-    @patch("boto3.client")
-    @patch("logging.warning")
+    @patch("logging.error")
+    @patch("logging.debug")
     def test_find_external_assets(
-        self, mock_log_warn: MagicMock, mock_s3: MagicMock, mock_get: MagicMock
+        self,
+        mock_debug: MagicMock,
+        mock_log_error: MagicMock,
+        mock_get: MagicMock,
     ):
-        """tests related to external assets"""
+        """Tests find_external_data_assets and
+        find_nonexistent_external_data_assets methods"""
         mock_get.return_value = (
             self.mock_search_all_data_assets_success_response
         )
-        self.api_handler.s3.list_objects.side_effect = [
+        self.api_handler_s3.s3.list_objects.side_effect = [
             {},
-            botocore.exceptions.ClientError(
-                {"Error": {"Code": 1, "Message": "foo"}}, "bar"
-            ),
+            Exception("Error"),
             {"CommonPrefixes": 1},
             {"CommonPrefixes": 2},
         ]
 
-        resp = self.api_handler.find_external_data_assets()
-        assert len(list(resp)) == 2
+        resp = list(self.api_handler_s3.find_external_data_assets())
+        self.assertEqual(2, len(resp))
 
-        resp = self.api_handler.find_nonexistent_external_data_assets()
-        assert len(list(resp)) == 1
+        resp = list(
+            self.api_handler_s3.find_nonexistent_external_data_assets()
+        )
+        self.assertEqual(1, len(list(resp)))
+
+        mock_debug.assert_called_once_with(
+            "aind-ephys-data-dev-u5u0i5 ecephys_655019_2023-04-03_18-10-10"
+            " exists? False"
+        )
+        mock_log_error.assert_called_once()
 
     @patch(
         "aind_codeocean_api.codeocean.CodeOceanClient.search_all_data_assets"
@@ -326,7 +336,8 @@ class TestAPIHandler(unittest.TestCase):
         mock_log_debug: MagicMock,
         mock_get: MagicMock,
     ):
-        """run archiving tests"""
+        """Tests find_archived_data_assets_to_delete method with successful
+        responses from CodeOCean"""
 
         mock_get.return_value = (
             self.mock_search_all_data_assets_success_response
@@ -336,8 +347,49 @@ class TestAPIHandler(unittest.TestCase):
         resp = self.api_handler.find_archived_data_assets_to_delete(
             keep_after=keep_after
         )
+        self.assertEqual(6, len(resp))
+        mock_log_info.assert_has_calls(
+            [
+                call(
+                    (
+                        "name: ecephys_661398_2023-03-31_17-01-09"
+                        "_nwb_2023-06-01_14-50-08, type: dataset"
+                    )
+                ),
+                call(
+                    (
+                        "name: ecephys_660166_2023-03-16_18-30-14_curated"
+                        "_2023-03-24_17-54-16, type: dataset"
+                    )
+                ),
+                call(
+                    "name: ecephys_636766_2023-01-25_00-00-00, type: dataset"
+                ),
+                call(
+                    (
+                        "name: ecephys_636766_2023-01-23_00-00-00_sorted-ks2.5"
+                        "_2023-06-01_14-48-42, type: dataset"
+                    )
+                ),
+                call(
+                    (
+                        "name: ecephys_622155_2022-05-31_15-29-16_2023-06-01"
+                        "_14-45-05, type: dataset"
+                    )
+                ),
+                call(
+                    (
+                        "name: multiplane-ophys_438912_2019-04-17_15-19-14"
+                        "_processed_2024-02-14_19-44-46, type: result"
+                    )
+                ),
+                call("6/8 archived assets deletable"),
+                call("internal: 1 assets, 535.12994798 GBs"),
+                call("external: 5 assets, 0.0 GBs"),
+            ]
+        )
 
-        assert len(resp) == 6
+        mock_log_debug.assert_not_called()
 
 
 if __name__ == "__main__":
