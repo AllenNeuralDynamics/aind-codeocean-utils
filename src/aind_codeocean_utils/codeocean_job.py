@@ -21,7 +21,6 @@ from aind_data_schema.core.data_description import (
     DataLevel,
     datetime_to_name_string,
 )
-
 from aind_codeocean_utils.models.config import (
     CaptureResultConfig,
     CodeOceanJobConfig,
@@ -500,7 +499,10 @@ class CodeOceanJob:
         # 1. register data assets (optional)
         input_data_assets = None
         if self.job_config.register_config is not None:
-            logger.info("Registering data asset")
+            logger.info(
+                "Registering data asset "
+                f"{self.job_config.register_config.prefix}"
+            )
             register_data_asset_response = (
                 self._register_data_and_update_permissions(
                     self.job_config.register_config
@@ -536,7 +538,7 @@ class CodeOceanJob:
             data_asset_response = self.co_client.get_data_asset(data_asset.id)
             data_asset_json = data_asset_response.json()
             data_asset_name = data_asset_json["name"]
-            data_asset_tags = data_asset_json["tags"]
+            data_asset_tags = data_asset_json.get("tags")
             # some of the older data assets don't have a custom_metadata field
             data_asset_custom_metadata = data_asset_json.get("custom_metadata")
         else:
