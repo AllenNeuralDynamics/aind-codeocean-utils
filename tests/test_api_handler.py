@@ -1,5 +1,6 @@
 """Example test template."""
 
+import datetime
 import json
 import os
 import unittest
@@ -35,11 +36,15 @@ class TestAPIHandler(unittest.TestCase):
         mock_co_client = CodeOceanClient(
             domain=co_mock_domain, token=co_mock_token
         )
+        mock_s3_client = MagicMock()
         cls.mock_search_all_data_assets_success_response = (
             mock_search_all_data_assets_success_response
         )
         cls.api_handler = APIHandler(co_client=mock_co_client)
         cls.api_handler_dry = APIHandler(co_client=mock_co_client, dryrun=True)
+        cls.api_handler_s3 = APIHandler(
+            co_client=mock_co_client, s3=mock_s3_client
+        )
 
     @patch(
         "aind_codeocean_api.codeocean.CodeOceanClient.search_all_data_assets"
@@ -114,9 +119,17 @@ class TestAPIHandler(unittest.TestCase):
             {
                 "data_asset_id": "63f2d2de-4af8-4397-94ab-9484c8e8c847",
                 "new_name": (
-                    "ecephys_622155_2022-05-31_15-29-16" "_2023-06-01_14-45-05"
+                    "ecephys_622155_2022-05-31_15-29-16_2023-06-01_14-45-05"
                 ),
                 "new_tags": {"new_tag"},
+            },
+            {
+                "data_asset_id": "fa312ea4-6068-4a4e-a40b-e8c73c9660d0",
+                "new_name": (
+                    "multiplane-ophys_438912_2019-04-17_15-19-14"
+                    "_processed_2024-02-14_19-44-46"
+                ),
+                "new_tags": {"pipeline-v3.0", "multiplane-ophys", "new_tag"},
             },
         ]
         actual_calls = [c.kwargs for c in mock_update.mock_calls]
@@ -257,6 +270,126 @@ class TestAPIHandler(unittest.TestCase):
         ]
         mock_log_debug.assert_has_calls(expected_debug_calls)
         mock_log_info.assert_called()
+
+    def test_bucket_prefix_exists(self):
+        """Tests bucket_prefix_exists evaluation from boto response."""
+
+        # Mock return values for list objects
+        self.api_handler_s3.s3.list_objects.return_value = {}
+        resp = self.api_handler_s3._bucket_prefix_exists(
+            bucket="some-bucket", prefix="some-prefix"
+        )
+        self.assertFalse(resp)
+        self.api_handler_s3.s3.list_objects.return_value = {
+            "CommonPrefixes": []
+        }
+        resp = self.api_handler_s3._bucket_prefix_exists(
+            bucket="some-bucket", prefix="some-prefix"
+        )
+        self.assertTrue(resp)
+
+    @patch(
+        "aind_codeocean_api.codeocean.CodeOceanClient.search_all_data_assets"
+    )
+    @patch("logging.error")
+    @patch("logging.debug")
+    def test_find_external_assets(
+        self,
+        mock_debug: MagicMock,
+        mock_log_error: MagicMock,
+        mock_get: MagicMock,
+    ):
+        """Tests find_external_data_assets and
+        find_nonexistent_external_data_assets methods"""
+        mock_get.return_value = (
+            self.mock_search_all_data_assets_success_response
+        )
+        self.api_handler_s3.s3.list_objects.side_effect = [
+            {},
+            Exception("Error"),
+            {"CommonPrefixes": 1},
+            {"CommonPrefixes": 2},
+        ]
+
+        resp = list(self.api_handler_s3.find_external_data_assets())
+        self.assertEqual(2, len(resp))
+
+        resp = list(
+            self.api_handler_s3.find_nonexistent_external_data_assets()
+        )
+        self.assertEqual(1, len(list(resp)))
+
+        mock_debug.assert_called_once_with(
+            "aind-ephys-data-dev-u5u0i5 ecephys_655019_2023-04-03_18-10-10"
+            " exists? False"
+        )
+        mock_log_error.assert_called_once()
+
+    @patch(
+        "aind_codeocean_api.codeocean.CodeOceanClient.search_all_data_assets"
+    )
+    @patch("logging.debug")
+    @patch("logging.info")
+    def test_find_archived_data_assets_to_delete(
+        self,
+        mock_log_info: MagicMock,
+        mock_log_debug: MagicMock,
+        mock_get: MagicMock,
+    ):
+        """Tests find_archived_data_assets_to_delete method with successful
+        responses from CodeOCean"""
+
+        mock_get.return_value = (
+            self.mock_search_all_data_assets_success_response
+        )
+
+        keep_after = datetime.datetime(year=2023, month=9, day=1)
+        resp = self.api_handler.find_archived_data_assets_to_delete(
+            keep_after=keep_after
+        )
+        self.assertEqual(6, len(resp))
+        mock_log_info.assert_has_calls(
+            [
+                call(
+                    (
+                        "name: ecephys_661398_2023-03-31_17-01-09"
+                        "_nwb_2023-06-01_14-50-08, type: dataset"
+                    )
+                ),
+                call(
+                    (
+                        "name: ecephys_660166_2023-03-16_18-30-14_curated"
+                        "_2023-03-24_17-54-16, type: dataset"
+                    )
+                ),
+                call(
+                    "name: ecephys_636766_2023-01-25_00-00-00, type: dataset"
+                ),
+                call(
+                    (
+                        "name: ecephys_636766_2023-01-23_00-00-00_sorted-ks2.5"
+                        "_2023-06-01_14-48-42, type: dataset"
+                    )
+                ),
+                call(
+                    (
+                        "name: ecephys_622155_2022-05-31_15-29-16_2023-06-01"
+                        "_14-45-05, type: dataset"
+                    )
+                ),
+                call(
+                    (
+                        "name: multiplane-ophys_438912_2019-04-17_15-19-14"
+                        "_processed_2024-02-14_19-44-46, type: result"
+                    )
+                ),
+                call("6/8 archived assets deletable"),
+                call("internal: 1 assets, 535.12994798 GBs"),
+                call("external: 5 assets, 0.0 GBs"),
+            ]
+        )
+
+        mock_log_debug.assert_not_called()
 
 
 if __name__ == "__main__":

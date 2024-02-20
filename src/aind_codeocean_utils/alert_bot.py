@@ -1,6 +1,7 @@
 """Module with Alert Bot for notifications on MS Teams"""
-import requests
 from typing import Optional
+
+import requests
 
 
 class AlertBot:
