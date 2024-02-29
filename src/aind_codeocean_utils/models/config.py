@@ -5,6 +5,7 @@ from typing import Dict, List, Optional
 from aind_codeocean_api.models.computations_requests import (
     ComputationDataAsset,
 )
+from aind_data_schema.core.data_description import DataLevel
 from pydantic import BaseModel, Field, ValidationInfo, field_validator
 
 
@@ -31,7 +32,8 @@ class RegisterDataConfig(BaseModel):
         description="Whether to keep the data asset on external storage.",
     )
     tags: List[str] = Field(
-        default=[], description="The tags to use to describe the data asset."
+        default=[DataLevel.RAW.value],
+        description="The tags to use to describe the data asset.",
     )
     custom_metadata: Optional[Dict] = Field(
         default=None,
@@ -151,7 +153,8 @@ class CaptureResultConfig(BaseModel):
         validate_default=True,
     )
     tags: List[str] = Field(
-        default=[], description="The tags to use to describe the data asset."
+        default=[DataLevel.DERIVED.value],
+        description="The tags to use to describe the data asset.",
     )
     custom_metadata: Dict = Field(
         default=dict(),
