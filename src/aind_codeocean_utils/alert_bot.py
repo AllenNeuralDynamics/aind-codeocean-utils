@@ -1,4 +1,5 @@
 """Module with Alert Bot for notifications on MS Teams"""
+
 from typing import Optional
 
 import requests

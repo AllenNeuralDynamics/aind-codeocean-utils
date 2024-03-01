@@ -57,8 +57,8 @@ class TestRegisterDataConfig(unittest.TestCase):
         self.assertEqual("asset_prefix", r.prefix)
         self.assertFalse(r.public)
         self.assertTrue(r.keep_on_external_storage)
-        self.assertEqual([], r.tags)
-        self.assertEqual(None, r.custom_metadata)
+        self.assertEqual(["raw"], r.tags)
+        self.assertEqual({"data level": "raw"}, r.custom_metadata)
         self.assertFalse(r.viewable_to_everyone)
 
     def test_validator(self):
@@ -188,8 +188,8 @@ class TestCaptureResultConfig(unittest.TestCase):
         self.assertEqual("some_process", c.process_name)
         self.assertEqual(None, c.mount)
         self.assertEqual(None, c.asset_name)
-        self.assertEqual([], c.tags)
-        self.assertEqual({}, c.custom_metadata)
+        self.assertEqual(["derived"], c.tags)
+        self.assertEqual({"data level": "derived"}, c.custom_metadata)
         self.assertFalse(c.viewable_to_everyone)
 
     def test_check_tags(self):
