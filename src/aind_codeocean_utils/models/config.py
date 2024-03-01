@@ -1,5 +1,6 @@
 """Models for config files."""
 
+from enum import Enum
 from typing import Dict, List, Optional
 
 from aind_codeocean_api.models.computations_requests import (
@@ -7,6 +8,14 @@ from aind_codeocean_api.models.computations_requests import (
 )
 from aind_data_schema.core.data_description import DataLevel
 from pydantic import BaseModel, Field, ValidationInfo, field_validator
+
+
+class CustomMetadataKeys(str, Enum):
+    """
+    Keys used for custom metadata in Code OCean
+    """
+
+    DATA_LEVEL = "data level"
 
 
 class RegisterDataConfig(BaseModel):
@@ -36,7 +45,7 @@ class RegisterDataConfig(BaseModel):
         description="The tags to use to describe the data asset.",
     )
     custom_metadata: Optional[Dict] = Field(
-        default=None,
+        default={CustomMetadataKeys.DATA_LEVEL.value: DataLevel.RAW.value},
         description="What key:value metadata tags to apply to the asset.",
     )
     viewable_to_everyone: bool = Field(
@@ -157,7 +166,7 @@ class CaptureResultConfig(BaseModel):
         description="The tags to use to describe the data asset.",
     )
     custom_metadata: Dict = Field(
-        default=dict(),
+        default={CustomMetadataKeys.DATA_LEVEL.value: DataLevel.DERIVED.value},
         description="What key:value metadata tags to apply to the asset.",
     )
     viewable_to_everyone: bool = Field(
