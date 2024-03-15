@@ -20,6 +20,8 @@ from aind_data_schema.core.data_description import (
 )
 from pydantic import BaseModel, Field
 
+from aind_codeocean_utils.api_handler import APIHandler
+
 logger = logging.getLogger(__name__)
 
 
@@ -77,7 +79,7 @@ class CodeOceanJob:
         process_timeout_seconds: int = None,
         add_data_level_tags: bool = True,
     ):
-        self.co_client = co_client
+        self.api_handler = APIHandler(co_client=co_client)
         self.register_data_config = register_data_config
         self.process_config = process_config
         self.capture_result_config = capture_result_config
@@ -127,8 +129,15 @@ class CodeOceanJob:
             request.tags = tags
             request.custom_metadata = custom_metadata
 
-        response = self.create_data_asset_and_update_permissions(
-            request=request
+        # TODO handle non-aws sources
+        if request.source.aws is not None:
+            assert (
+                request.source.aws.keep_on_external_storage is True
+            ), "Data assets must be kept on external storage."
+
+        response = self.api_handler.create_data_asset_and_update_permissions(
+            request=request,
+            assets_viewable_to_everyone=self.assets_viewable_to_everyone,
         )
 
         return response
@@ -148,9 +157,11 @@ class CodeOceanJob:
                 )
             )
 
-        self.check_data_assets(self.process_config.data_assets)
+        self.api_handler.check_data_assets(self.process_config.data_assets)
 
-        run_capsule_response = self.co_client.run_capsule(self.process_config)
+        run_capsule_response = self.api_handler.co_client.run_capsule(
+            self.process_config
+        )
         run_capsule_response_json = run_capsule_response.json()
 
         if run_capsule_response_json.get("id") is None:
@@ -169,8 +180,8 @@ class CodeOceanJob:
             while executing:
                 num_checks += 1
                 time.sleep(self.process_poll_interval_seconds)
-                computation_response = self.co_client.get_computation(
-                    computation_id
+                computation_response = (
+                    self.api_handler.co_client.get_computation(computation_id)
                 )
                 curr_computation_state = computation_response.json()
 
@@ -229,139 +240,10 @@ class CodeOceanJob:
             create_data_asset_request.custom_metadata = custom_metadata
 
         capture_result_response = (
-            self.create_data_asset_and_update_permissions(
-                request=create_data_asset_request
+            self.api_handler.create_data_asset_and_update_permissions(
+                request=create_data_asset_request,
+                assets_viewable_to_everyone=self.assets_viewable_to_everyone,
             )
         )
 
         return capture_result_response
-
-    def wait_for_data_availability(
-        self,
-        data_asset_id: str,
-        timeout_seconds: int = 300,
-        pause_interval=10,
-    ) -> requests.Response:
-        """
-        There is a lag between when a register data request is made and
-        when the data is available to be used in a capsule.
-        Parameters
-        ----------
-        data_asset_id : str
-            ID of the data asset to check for.
-        timeout_seconds : int
-            Roughly how long the method should check if the data is available.
-        pause_interval : int
-            How many seconds between when the backend is queried.
-
-        Returns
-        -------
-        requests.Response
-
-        """
-
-        num_of_checks = 0
-        break_flag = False
-        time.sleep(pause_interval)
-        response = self.co_client.get_data_asset(data_asset_id)
-        if ((pause_interval * num_of_checks) > timeout_seconds) or (
-            response.status_code == 200
-        ):
-            break_flag = True
-        while not break_flag:
-            time.sleep(pause_interval)
-            response = self.co_client.get_data_asset(data_asset_id)
-            num_of_checks += 1
-            if ((pause_interval * num_of_checks) > timeout_seconds) or (
-                response.status_code == 200
-            ):
-                break_flag = True
-        return response
-
-    def create_data_asset_and_update_permissions(
-        self, request: CreateDataAssetRequest
-    ) -> requests.Response:
-        """
-        Register a data asset. Can also optionally update the permissions on
-        the data asset.
-
-        Parameters
-        ----------
-        request : CreateDataAssetRequest
-
-        Notes
-        -----
-        The credentials for the s3 bucket must be set in the environment.
-
-        Returns
-        -------
-        requests.Response
-        """
-
-        # TODO handle non-aws sources
-        if request.source.aws is not None:
-            assert (
-                request.source.aws.keep_on_external_storage is True
-            ), "AWS data assets must be kept on external storage."
-
-        create_data_asset_response = self.co_client.create_data_asset(request)
-        create_data_asset_response_json = create_data_asset_response.json()
-
-        if create_data_asset_response_json.get("id") is None:
-            raise KeyError(
-                f"Something went wrong registering"
-                f" '{request.name}'. "
-                f"Response Status Code: {create_data_asset_response.status_code}. "
-                f"Response Message: {create_data_asset_response_json}"
-            )
-
-        if self.assets_viewable_to_everyone:
-            data_asset_id = create_data_asset_response_json["id"]
-            response_data_available = self.wait_for_data_availability(
-                data_asset_id
-            )
-
-            if response_data_available.status_code != 200:
-                raise FileNotFoundError(f"Unable to find: {data_asset_id}")
-
-            # Make data asset viewable to everyone
-            update_data_perm_response = self.co_client.update_permissions(
-                data_asset_id=data_asset_id, everyone="viewer"
-            )
-            logger.info(
-                "Permissions response: "
-                f"{update_data_perm_response.status_code}"
-            )
-
-        return create_data_asset_response
-
-    def check_data_assets(
-        self, data_assets: List[ComputationDataAsset]
-    ) -> None:
-        """
-        Check if data assets exist.
-
-        Parameters
-        ----------
-        data_assets : list
-            List of data assets to check for.
-
-        Raises
-        ------
-        FileNotFoundError
-            If a data asset is not found.
-        ConnectionError
-            If there is an issue retrieving a data asset.
-        """
-        for data_asset in data_assets:
-            assert isinstance(
-                data_asset, ComputationDataAsset
-            ), "Data assets must be of type ComputationDataAsset"
-            data_asset_id = data_asset.id
-            response = self.co_client.get_data_asset(data_asset_id)
-            if response.status_code == 404:
-                raise FileNotFoundError(f"Unable to find: {data_asset_id}")
-            elif response.status_code != 200:
-                raise ConnectionError(
-                    f"There was an issue retrieving: {data_asset_id}"
-                )
