@@ -1,3 +1,5 @@
+""" Utility for coordinating registration, processing, and capture of results in Code Ocean """
+
 import logging
 import time
 from datetime import datetime
@@ -26,9 +28,11 @@ logger = logging.getLogger(__name__)
 
 
 def build_processed_data_asset_name(input_data_asset_name, process_name):
+    """Build a name for a processed data asset."""
+
     capture_time = datetime_to_name_string(datetime.now())
 
-    return f"{input_data_asset_name}" f"_{process_name}" f"_{capture_time}"
+    return f"{input_data_asset_name}_{process_name}_{capture_time}"
 
 
 def add_data_level_metadata(
@@ -36,7 +40,7 @@ def add_data_level_metadata(
     tags: List[str] = None,
     custom_metadata: dict = None,
 ) -> Tuple[List[str], dict]:
-    """Add data level metadata to a data asset."""
+    """Add data level metadata to tags and custom metadata."""
 
     tags = set(tags or [])
     tags.add(data_level.value)
@@ -120,6 +124,7 @@ class CodeOceanJob:
     def register_data(
         self, request: CreateDataAssetRequest
     ) -> requests.Response:
+    """Register the data asset, also handling metadata tagging."""
         if self.add_data_level_tags:
             tags, custom_metadata = add_data_level_metadata(
                 DataLevel.RAW,
@@ -145,6 +150,8 @@ class CodeOceanJob:
     def process_data(
         self, register_data_response: requests.Response = None
     ) -> requests.Response:
+    """Process the data, handling the case where the data was just registered upstream."""
+
         if self.process_config.data_assets is None:
             self.process_config.data_assets = []
 
@@ -199,6 +206,8 @@ class CodeOceanJob:
     def capture_result(
         self, process_response: requests.Response
     ) -> requests.Response:
+    """Capture the result of the processing that just finished."""
+
         computation_id = process_response.json()["id"]
 
         if isinstance(self.capture_result_config, CreateDataAssetRequest):
