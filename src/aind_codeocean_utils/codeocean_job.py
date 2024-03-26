@@ -27,6 +27,14 @@ from aind_codeocean_utils.api_handler import APIHandler
 logger = logging.getLogger(__name__)
 
 
+class CustomMetadataKeys(str, Enum):
+    """
+    Keys used for custom metadata in Code OCean
+    """
+
+    DATA_LEVEL = "data level"
+
+
 def build_processed_data_asset_name(input_data_asset_name, process_name):
     """Build a name for a processed data asset."""
 
@@ -51,7 +59,7 @@ def add_data_level_metadata(
     tags = list(tags)
 
     custom_metadata = custom_metadata or {}
-    custom_metadata.update({"data level": data_level.value})
+    custom_metadata.update({CustomMetadataKeys.DATA_LEVEL: data_level.value})
 
     return tags, custom_metadata
 
@@ -124,7 +132,7 @@ class CodeOceanJob:
     def register_data(
         self, request: CreateDataAssetRequest
     ) -> requests.Response:
-    """Register the data asset, also handling metadata tagging."""
+        """Register the data asset, also handling metadata tagging."""
         if self.add_data_level_tags:
             tags, custom_metadata = add_data_level_metadata(
                 DataLevel.RAW,
@@ -150,7 +158,7 @@ class CodeOceanJob:
     def process_data(
         self, register_data_response: requests.Response = None
     ) -> requests.Response:
-    """Process the data, handling the case where the data was just registered upstream."""
+        """Process the data, handling the case where the data was just registered upstream."""
 
         if self.process_config.data_assets is None:
             self.process_config.data_assets = []
@@ -206,7 +214,7 @@ class CodeOceanJob:
     def capture_result(
         self, process_response: requests.Response
     ) -> requests.Response:
-    """Capture the result of the processing that just finished."""
+        """Capture the result of the processing that just finished."""
 
         computation_id = process_response.json()["id"]
 
