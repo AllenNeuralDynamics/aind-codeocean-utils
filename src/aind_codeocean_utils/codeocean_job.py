@@ -1,8 +1,12 @@
-""" Utility for coordinating registration, processing, and capture of results in Code Ocean """
+"""
+Utility for coordinating registration, processing,
+and capture of results in Code Ocean
+"""
 
 import logging
 import time
 from datetime import datetime
+from enum import Enum
 from typing import List, Optional, Tuple, Union
 
 import requests
@@ -78,6 +82,10 @@ class CaptureResultConfig(BaseModel):
 
 
 class CodeOceanJob:
+    """
+    Class for coordinating registration, processing, and capture of results in
+    Code Ocean
+    """
     def __init__(
         self,
         co_client: CodeOceanClient,
@@ -91,6 +99,28 @@ class CodeOceanJob:
         process_timeout_seconds: int = None,
         add_data_level_tags: bool = True,
     ):
+        """
+        Class constructor
+        Parameters
+        ----------
+        co_client : CodeOceanClient
+            Code Ocean client
+        register_data_config : Optional[CreateDataAssetRequest]
+            Configuration for registering data
+        process_config : Optional[RunCapsuleRequest]
+            Configuration for processing data
+        capture_result_config : CaptureResultConfi or CreateDataAssetRequest
+            Configuration for capturing results
+        assets_viewable_to_everyone : bool
+            Whether newly registered and processed assets should be
+            viewable to everyone
+        process_poll_interval_seconds : int
+            Interval in seconds for polling the process
+        process_timeout_seconds : int
+            Timeout in seconds for the process
+        add_data_level_tags : bool
+            Whether to add data level tags to assets
+        """
         self.api_handler = APIHandler(co_client=co_client)
         self.register_data_config = register_data_config
         self.process_config = process_config
@@ -158,7 +188,8 @@ class CodeOceanJob:
     def process_data(
         self, register_data_response: requests.Response = None
     ) -> requests.Response:
-        """Process the data, handling the case where the data was just registered upstream."""
+        """Process the data, handling the case where the data was just
+        registered upstream."""
 
         if self.process_config.data_assets is None:
             self.process_config.data_assets = []
@@ -201,11 +232,11 @@ class CodeOceanJob:
                 curr_computation_state = computation_response.json()
 
                 if (curr_computation_state["state"] == "completed") or (
-                    (run_capsule_config.timeout_seconds is not None)
+                    (self.process_timeout_seconds is not None)
                     and (
-                        run_capsule_config.process_poll_interval_seconds
+                        self.process_poll_interval_seconds
                         * num_checks
-                        >= run_capsule_config.timeout_seconds
+                        >= self.process_timeout_seconds
                     )
                 ):
                     executing = False
@@ -219,7 +250,7 @@ class CodeOceanJob:
         computation_id = process_response.json()["id"]
 
         if isinstance(self.capture_result_config, CreateDataAssetRequest):
-            create_data_asset_request = capture_result_config
+            create_data_asset_request = self.capture_result_config
         elif isinstance(self.capture_result_config, CaptureResultConfig):
             create_data_asset_request = CreateDataAssetRequest(
                 name=None,
