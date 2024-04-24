@@ -9,7 +9,6 @@ import requests
 from aind_codeocean_api.codeocean import CodeOceanClient
 from aind_codeocean_api.models.computations_requests import (
     ComputationDataAsset,
-    RunCapsuleRequest,
 )
 from aind_codeocean_api.models.data_assets_requests import (
     CreateDataAssetRequest,
@@ -352,7 +351,8 @@ class APIHandler:
             raise KeyError(
                 f"Something went wrong registering"
                 f" '{request.name}'. "
-                f"Response Status Code: {create_data_asset_response.status_code}. "
+                f"Response Status Code: "
+                f"{create_data_asset_response.status_code}. "
                 f"Response Message: {create_data_asset_response_json}"
             )
 
