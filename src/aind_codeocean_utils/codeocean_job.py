@@ -4,6 +4,7 @@ import logging
 import time
 from datetime import datetime
 from typing import List, Optional, Tuple, Union
+from enum import Enum
 
 import requests
 from aind_codeocean_api.codeocean import CodeOceanClient
@@ -59,15 +60,33 @@ def add_data_level_metadata(
     tags = list(tags)
 
     custom_metadata = custom_metadata or {}
-    custom_metadata.update({CustomMetadataKeys.DATA_LEVEL: data_level.value})
+    custom_metadata.update(
+        {CustomMetadataKeys.DATA_LEVEL.value: data_level.value}
+    )
 
     return tags, custom_metadata
+
+
+class ProcessConfig(BaseModel):
+    """
+    Settings for processing data
+    """
+
+    request: RunCapsuleRequest
+    input_data_asset_mount: Optional[str] = None
+    poll_interval_seconds: Optional[int] = (300,)
+    timeout_seconds: Optional[int] = None
 
 
 class CaptureResultConfig(BaseModel):
     """
     Settings for capturing results
     """
+
+    request: Optional[CreateDataAssetRequest] = Field(
+        default=None,
+        description="Request to create a data asset based on a processed result.",
+    )
 
     process_name: Optional[str] = Field(
         default="processed", description="Name of the process."
@@ -82,13 +101,9 @@ class CodeOceanJob:
         self,
         co_client: CodeOceanClient,
         register_data_config: Optional[CreateDataAssetRequest] = None,
-        process_config: Optional[RunCapsuleRequest] = None,
-        capture_result_config: Optional[
-            Union[CaptureResultConfig, CreateDataAssetRequest]
-        ] = None,
+        process_config: Optional[ProcessConfig] = None,
+        capture_result_config: Optional[CaptureResultConfig] = None,
         assets_viewable_to_everyone: bool = True,
-        process_poll_interval_seconds: int = 300,
-        process_timeout_seconds: int = None,
         add_data_level_tags: bool = True,
     ):
         self.api_handler = APIHandler(co_client=co_client)
@@ -96,8 +111,6 @@ class CodeOceanJob:
         self.process_config = process_config
         self.capture_result_config = capture_result_config
         self.assets_viewable_to_everyone = assets_viewable_to_everyone
-        self.process_poll_interval_seconds = process_poll_interval_seconds
-        self.process_timeout_seconds = process_timeout_seconds
         self.add_data_level_tags = add_data_level_tags
 
     def run_job(self):
@@ -160,22 +173,31 @@ class CodeOceanJob:
     ) -> requests.Response:
         """Process the data, handling the case where the data was just registered upstream."""
 
-        if self.process_config.data_assets is None:
-            self.process_config.data_assets = []
+        if self.process_config.request.data_assets is None:
+            self.process_config.request.data_assets = []
 
         if register_data_response:
             input_data_asset_id = register_data_response.json()["id"]
-            input_data_asset_mount = self.register_data_config.mount
-            self.process_config.data_assets.append(
+
+            if self.process_config.input_data_asset_mount:
+                input_data_asset_mount = (
+                    self.process_config.input_data_asset_mount
+                )
+            else:
+                input_data_asset_mount = self.register_data_config.mount
+
+            self.process_config.request.data_assets.append(
                 ComputationDataAsset(
                     id=input_data_asset_id, mount=input_data_asset_mount
                 )
             )
 
-        self.api_handler.check_data_assets(self.process_config.data_assets)
+        self.api_handler.check_data_assets(
+            self.process_config.request.data_assets
+        )
 
         run_capsule_response = self.api_handler.co_client.run_capsule(
-            self.process_config
+            self.process_config.request
         )
         run_capsule_response_json = run_capsule_response.json()
 
@@ -189,23 +211,22 @@ class CodeOceanJob:
         computation_id = run_capsule_response_json["id"]
 
         # TODO: We may need to clean up the loop termination logic
-        if self.process_poll_interval_seconds:
+        if self.process_config.poll_interval_seconds:
             executing = True
             num_checks = 0
             while executing:
                 num_checks += 1
-                time.sleep(self.process_poll_interval_seconds)
+                time.sleep(self.process_config.poll_interval_seconds)
                 computation_response = (
                     self.api_handler.co_client.get_computation(computation_id)
                 )
                 curr_computation_state = computation_response.json()
 
                 if (curr_computation_state["state"] == "completed") or (
-                    (run_capsule_config.timeout_seconds is not None)
+                    (self.process_config.timeout_seconds is not None)
                     and (
-                        run_capsule_config.process_poll_interval_seconds
-                        * num_checks
-                        >= run_capsule_config.timeout_seconds
+                        self.process_config.poll_interval_seconds * num_checks
+                        >= self.process_config.timeout_seconds
                     )
                 ):
                     executing = False
@@ -218,9 +239,8 @@ class CodeOceanJob:
 
         computation_id = process_response.json()["id"]
 
-        if isinstance(self.capture_result_config, CreateDataAssetRequest):
-            create_data_asset_request = capture_result_config
-        elif isinstance(self.capture_result_config, CaptureResultConfig):
+        create_data_asset_request = self.capture_result_config.request
+        if create_data_asset_request is None:
             create_data_asset_request = CreateDataAssetRequest(
                 name=None,
                 mount=None,
