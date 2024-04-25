@@ -61,7 +61,7 @@ def add_data_level_metadata(
     if data_level == DataLevel.DERIVED:
         tags.discard(DataLevel.RAW.value)
 
-    tags = list(tags)
+    tags = sorted(list(tags))
 
     custom_metadata = custom_metadata or {}
     custom_metadata.update(
@@ -78,11 +78,11 @@ class ProcessConfig(BaseModel):
 
     request: RunCapsuleRequest
     input_data_asset_mount: Optional[str] = None
-    poll_interval_seconds: Optional[int] = (300,)
+    poll_interval_seconds: Optional[int] = 300
     timeout_seconds: Optional[int] = None
 
 
-class CaptureResultConfig(BaseModel):
+class CaptureConfig(BaseModel):
     """
     Settings for capturing results
     """
@@ -100,48 +100,37 @@ class CaptureResultConfig(BaseModel):
     )
 
 
+class CodeOceanJobConfig(BaseModel):
+    """
+    Class for coordinating registration, processing, and capture of results in
+    Code Ocean
+    """
+
+    register_config: Optional[CreateDataAssetRequest] = None
+    process_config: Optional[ProcessConfig] = None
+    capture_config: Optional[CaptureConfig] = None
+    assets_viewable_to_everyone: bool = True
+    add_data_level_tags: bool = True
+
+
 class CodeOceanJob:
     """
     Class for coordinating registration, processing, and capture of results in
     Code Ocean
     """
+
     def __init__(
-        self,
-        co_client: CodeOceanClient,
-        register_data_config: Optional[CreateDataAssetRequest] = None,
-        process_config: Optional[ProcessConfig] = None,
-        capture_result_config: Optional[CaptureResultConfig] = None,
-        assets_viewable_to_everyone: bool = True,
-        add_data_level_tags: bool = True,
+        self, co_client: CodeOceanClient, job_config: CodeOceanJobConfig
     ):
-        """
-        Class constructor
-        Parameters
-        ----------
-        co_client : CodeOceanClient
-            Code Ocean client
-        register_data_config : Optional[CreateDataAssetRequest]
-            Configuration for registering data
-        process_config : Optional[RunCapsuleRequest]
-            Configuration for processing data
-        capture_result_config : CaptureResultConfi or CreateDataAssetRequest
-            Configuration for capturing results
-        assets_viewable_to_everyone : bool
-            Whether newly registered and processed assets should be
-            viewable to everyone
-        process_poll_interval_seconds : int
-            Interval in seconds for polling the process
-        process_timeout_seconds : int
-            Timeout in seconds for the process
-        add_data_level_tags : bool
-            Whether to add data level tags to assets
-        """
+        job_config = job_config.model_copy(deep=True)
         self.api_handler = APIHandler(co_client=co_client)
-        self.register_data_config = register_data_config
-        self.process_config = process_config
-        self.capture_result_config = capture_result_config
-        self.assets_viewable_to_everyone = assets_viewable_to_everyone
-        self.add_data_level_tags = add_data_level_tags
+        self.register_config = job_config.register_config
+        self.process_config = job_config.process_config
+        self.capture_config = job_config.capture_config
+        self.assets_viewable_to_everyone = (
+            job_config.assets_viewable_to_everyone
+        )
+        self.add_data_level_tags = job_config.add_data_level_tags
 
     def run_job(self):
         """Run the job."""
@@ -150,14 +139,14 @@ class CodeOceanJob:
         process_response = None
         capture_response = None
 
-        if self.capture_result_config:
+        if self.capture_config:
             assert (
                 self.process_config is not None
             ), "process_config must be provided to capture results"
 
-        if self.register_data_config:
+        if self.register_config:
             register_data_response = self.register_data(
-                request=self.register_data_config
+                request=self.register_config
             )
 
         if self.process_config:
@@ -165,7 +154,7 @@ class CodeOceanJob:
                 register_data_response=register_data_response
             )
 
-        if self.capture_result_config:
+        if self.capture_config:
             capture_response = self.capture_result(
                 process_response=process_response
             )
@@ -215,7 +204,7 @@ class CodeOceanJob:
                     self.process_config.input_data_asset_mount
                 )
             else:
-                input_data_asset_mount = self.register_data_config.mount
+                input_data_asset_mount = self.register_config.mount
 
             self.process_config.request.data_assets.append(
                 ComputationDataAsset(
@@ -256,8 +245,7 @@ class CodeOceanJob:
                 if (curr_computation_state["state"] == "completed") or (
                     (self.process_timeout_seconds is not None)
                     and (
-                        self.process_poll_interval_seconds
-                        * num_checks
+                        self.process_poll_interval_seconds * num_checks
                         >= self.process_timeout_seconds
                     )
                 ):
@@ -271,7 +259,7 @@ class CodeOceanJob:
 
         computation_id = process_response.json()["id"]
 
-        create_data_asset_request = self.capture_result_config.request
+        create_data_asset_request = self.capture_config.request
         if create_data_asset_request is None:
             create_data_asset_request = CreateDataAssetRequest(
                 name=None,
@@ -280,20 +268,20 @@ class CodeOceanJob:
                 custom_metadata={},
             )
 
-            asset_name = None
-            if self.capture_result_config.input_data_asset_name is not None:
-                asset_name = self.capture_result_config.input_data_asset_name
-            elif self.register_data_config is not None:
-                asset_name = self.register_data_config.name
+        if create_data_asset_request.name is None:
+            if self.capture_config.input_data_asset_name is not None:
+                asset_name = self.capture_config.input_data_asset_name
+            elif self.register_config is not None:
+                asset_name = build_processed_data_asset_name(
+                    self.capture_config.process_name, self.register_config.name
+                )
             else:
-                raise ValueError("could not determine captured asset name")
+                raise AssertionError("Data asset name not provided")
 
-            asset_name = build_processed_data_asset_name(
-                asset_name,
-                self.capture_result_config.process_name,
-            )
             create_data_asset_request.name = asset_name
-            create_data_asset_request.mount = asset_name
+
+        if create_data_asset_request.mount is None:
+            create_data_asset_request.mount = create_data_asset_request.name
 
         create_data_asset_request.source = Source(
             computation=Sources.Computation(id=computation_id)
