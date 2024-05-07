@@ -20,6 +20,7 @@ from aind_codeocean_utils.codeocean_job import (
     CodeOceanJobConfig,
     ProcessConfig,
     CaptureConfig,
+    build_processed_data_asset_name,
 )
 
 
@@ -56,6 +57,15 @@ class TestCodeOceanJob(unittest.TestCase):
                 ],
                 parameters=["param1", "param2"],
             )
+        )
+        basic_process_config_no_assets = ProcessConfig(
+            request=RunCapsuleRequest(
+                capsule_id="123-abc",
+                pipeline_id=None,
+                data_assets=None,
+                parameters=["param1", "param2"],
+            ),
+            input_data_asset_mount="custom-mount",
         )
         basic_process_data_input_mount_config = ProcessConfig(
             request=RunCapsuleRequest(
@@ -97,6 +107,9 @@ class TestCodeOceanJob(unittest.TestCase):
                 },
             ),
         )
+        basic_capture_config_no_request = CaptureConfig(
+            process_name="some_process", request=None
+        )
         none_vals_capture_config = CaptureConfig(
             process_name="some_process",
             request=CreateDataAssetRequest(
@@ -132,9 +145,19 @@ class TestCodeOceanJob(unittest.TestCase):
             process_config=basic_process_config,
             capture_config=basic_capture_config,
         )
+        cls.basic_codeocean_job_config_no_assets = CodeOceanJobConfig(
+            register_config=basic_register_data_config,
+            process_config=basic_process_config_no_assets,
+            capture_config=basic_capture_config,
+        )
         cls.basic_input_mount_codeocean_job_config = CodeOceanJobConfig(
             register_config=basic_register_data_config,
             process_config=basic_process_data_input_mount_config,
+        )
+        cls.no_capture_request_job_config = CodeOceanJobConfig(
+            register_config=basic_register_data_config,
+            process_config=basic_process_config_no_assets,
+            capture_config=basic_capture_config_no_request,
         )
         cls.none_vals_codeocean_job_config = CodeOceanJobConfig(
             register_config=basic_register_data_config,
@@ -367,6 +390,46 @@ class TestCodeOceanJob(unittest.TestCase):
             },
             response.json(),
         )
+        codeocean_job_no_assets = CodeOceanJob(
+            co_client=self.co_client,
+            job_config=self.basic_codeocean_job_config_no_assets,
+        )
+
+        response = codeocean_job_no_assets.process_data(
+            register_data_response=some_get_data_asset_response
+        )
+
+        # test failed response ID
+        some_run_response = requests.Response()
+        some_run_response.status_code = 200
+        some_run_response.json = lambda: (
+            {
+                "created": 1668125314,
+                "end_status": "succeeded",
+                "has_results": False,
+                "id": None,
+                "name": "Run With Parameters 8125314",
+                "parameters": [
+                    {"name": "", "value": '{"p_1": {"p1_1": "some_path"}}'}
+                ],
+                "run_time": 8,
+                "state": "completed",
+            }
+        )
+        mock_run_capsule.return_value = some_run_response
+
+        codeocean_job = CodeOceanJob(
+            co_client=self.co_client,
+            job_config=self.basic_codeocean_job_config,
+        )
+        with self.assertRaises(KeyError) as e:
+            codeocean_job.process_data(
+                register_data_response=some_get_data_asset_response
+            )
+
+        assert "Something went wrong running the capsule or pipeline." in repr(
+            e.exception
+        )
 
     @patch("time.sleep", return_value=None)
     @patch("aind_codeocean_api.codeocean.CodeOceanClient.create_data_asset")
@@ -583,6 +646,17 @@ class TestCodeOceanJob(unittest.TestCase):
         codeocean_job = CodeOceanJob(
             co_client=self.co_client,
             job_config=self.basic_codeocean_job_config,
+        )
+        actual_response = codeocean_job.capture_result(
+            process_response=some_process_response
+        )
+        self.assertEqual(some_create_data_asset_response, actual_response)
+        mock_sleep.assert_not_called()
+
+        # test no capture request
+        codeocean_job = CodeOceanJob(
+            co_client=self.co_client,
+            job_config=self.no_capture_request_job_config,
         )
         actual_response = codeocean_job.capture_result(
             process_response=some_process_response
@@ -1270,6 +1344,17 @@ class TestCodeOceanJob(unittest.TestCase):
         # additional_custom_metadata to the _capture_result method
         mock_capture_result.assert_called_once_with(
             process_response=some_run_response
+        )
+
+    def test_build_processed_data_asset_name(self):
+        """Tests build_processed_data_asset_name function"""
+        input_data_asset_name = "ecephys_00000_2022-10-10_16-13-22"
+        process_name = "test-process"
+        processed_asset_name = build_processed_data_asset_name(
+            input_data_asset_name, process_name
+        )
+        assert processed_asset_name.startswith(
+            f"{input_data_asset_name}_{process_name}_"
         )
 
 
