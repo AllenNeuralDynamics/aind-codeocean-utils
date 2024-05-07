@@ -372,7 +372,8 @@ class TestCodeOceanJob(unittest.TestCase):
     @patch("aind_codeocean_api.codeocean.CodeOceanClient.create_data_asset")
     @patch("aind_codeocean_api.codeocean.CodeOceanClient.update_permissions")
     @patch(
-        "aind_codeocean_utils.api_handler.APIHandler.wait_for_data_availability"
+        "aind_codeocean_utils.api_handler."
+        "APIHandler.wait_for_data_availability"
     )
     def test_create_data_asset_and_update_permissions(
         self,
@@ -430,9 +431,13 @@ class TestCodeOceanJob(unittest.TestCase):
             co_client=self.co_client,
             job_config=self.basic_codeocean_job_config,
         )
-        actual_response = codeocean_job.api_handler.create_data_asset_and_update_permissions(
-            request=codeocean_job.register_config,
-            assets_viewable_to_everyone=codeocean_job.assets_viewable_to_everyone,
+        actual_response = (
+            codeocean_job.api_handler.create_data_asset_and_update_permissions(
+                request=codeocean_job.register_config,
+                assets_viewable_to_everyone=(
+                    codeocean_job.assets_viewable_to_everyone
+                ),
+            )
         )
         self.assertEqual(some_create_data_asset_response, actual_response)
         mock_sleep.assert_not_called()
@@ -441,7 +446,8 @@ class TestCodeOceanJob(unittest.TestCase):
     @patch("aind_codeocean_api.codeocean.CodeOceanClient.create_data_asset")
     @patch("aind_codeocean_api.codeocean.CodeOceanClient.update_permissions")
     @patch(
-        "aind_codeocean_utils.api_handler.APIHandler.wait_for_data_availability"
+        "aind_codeocean_utils.api_handler.APIHandler."
+        "wait_for_data_availability"
     )
     def test_create_data_asset_and_update_permissions_failure(
         self,
@@ -450,7 +456,10 @@ class TestCodeOceanJob(unittest.TestCase):
         mock_create_data_asset: MagicMock,
         mock_sleep: MagicMock,
     ):
-        """Tests _create_data_asset_and_update_permissions with a fail response"""
+        """
+        Tests _create_data_asset_and_update_permissions with
+        a fail response
+        """
         fake_data_asset_id = "abc-123"
 
         some_create_data_asset_response = requests.Response()
@@ -485,7 +494,9 @@ class TestCodeOceanJob(unittest.TestCase):
         with self.assertRaises(FileNotFoundError) as e:
             codeocean_job.api_handler.create_data_asset_and_update_permissions(
                 request=codeocean_job.register_config,
-                assets_viewable_to_everyone=codeocean_job.assets_viewable_to_everyone,
+                assets_viewable_to_everyone=(
+                    codeocean_job.assets_viewable_to_everyone
+                ),
             )
         self.assertEqual(
             "FileNotFoundError('Unable to find: abc-123')", repr(e.exception)
@@ -497,7 +508,8 @@ class TestCodeOceanJob(unittest.TestCase):
     @patch("aind_codeocean_api.codeocean.CodeOceanClient.create_data_asset")
     @patch("aind_codeocean_api.codeocean.CodeOceanClient.update_permissions")
     @patch(
-        "aind_codeocean_utils.api_handler.APIHandler.wait_for_data_availability"
+        "aind_codeocean_utils.api_handler.APIHandler."
+        "wait_for_data_availability"
     )
     def test_capture_result(
         self,
@@ -582,7 +594,8 @@ class TestCodeOceanJob(unittest.TestCase):
     @patch("aind_codeocean_api.codeocean.CodeOceanClient.create_data_asset")
     @patch("aind_codeocean_api.codeocean.CodeOceanClient.update_permissions")
     @patch(
-        "aind_codeocean_utils.api_handler.APIHandler.wait_for_data_availability"
+        "aind_codeocean_utils.api_handler.APIHandler."
+        "wait_for_data_availability"
     )
     def test_capture_result_additional_tags_and_metadata(
         self,
@@ -694,7 +707,8 @@ class TestCodeOceanJob(unittest.TestCase):
     @patch("aind_codeocean_api.codeocean.CodeOceanClient.create_data_asset")
     @patch("aind_codeocean_api.codeocean.CodeOceanClient.update_permissions")
     @patch(
-        "aind_codeocean_utils.api_handler.APIHandler.wait_for_data_availability"
+        "aind_codeocean_utils.api_handler.APIHandler."
+        "wait_for_data_availability"
     )
     def test_capture_result_none_vals(
         self,
@@ -791,7 +805,8 @@ class TestCodeOceanJob(unittest.TestCase):
     @patch("aind_codeocean_api.codeocean.CodeOceanClient.create_data_asset")
     @patch("aind_codeocean_api.codeocean.CodeOceanClient.update_permissions")
     @patch(
-        "aind_codeocean_utils.api_handler.APIHandler.wait_for_data_availability"
+        "aind_codeocean_utils.api_handler.APIHandler."
+        "wait_for_data_availability"
     )
     def test_capture_result_registration_failed(
         self,
@@ -836,9 +851,9 @@ class TestCodeOceanJob(unittest.TestCase):
 
         self.assertEqual(
             (
-                "KeyError(\"Something went wrong registering 'some_asset_name'."
-                " Response Status Code: 500. Response Message:"
-                " {'messsage': 'Something went wrong!'}\")"
+                'KeyError("Something went wrong registering '
+                "'some_asset_name'. Response Status Code: 500. "
+                "Response Message: {'messsage': 'Something went wrong!'}\")"
             ),
             repr(e.exception),
         )
@@ -850,7 +865,8 @@ class TestCodeOceanJob(unittest.TestCase):
     @patch("aind_codeocean_api.codeocean.CodeOceanClient.create_data_asset")
     @patch("aind_codeocean_api.codeocean.CodeOceanClient.update_permissions")
     @patch(
-        "aind_codeocean_utils.api_handler.APIHandler.wait_for_data_availability"
+        "aind_codeocean_utils.api_handler.APIHandler"
+        ".wait_for_data_availability"
     )
     def test_capture_result_wait_for_data_failure(
         self,
@@ -923,7 +939,8 @@ class TestCodeOceanJob(unittest.TestCase):
 
     @patch("aind_codeocean_utils.codeocean_job.CodeOceanJob.capture_result")
     @patch(
-        "aind_codeocean_utils.api_handler.APIHandler.create_data_asset_and_update_permissions"
+        "aind_codeocean_utils.api_handler.APIHandler."
+        "create_data_asset_and_update_permissions"
     )
     @patch("aind_codeocean_utils.codeocean_job.CodeOceanJob.process_data")
     def test_run_job(
@@ -939,7 +956,6 @@ class TestCodeOceanJob(unittest.TestCase):
         custom_metadata = (
             self.basic_codeocean_job_config.register_config.custom_metadata
         )
-        register_mount = self.basic_codeocean_job_config.register_config.mount
         some_register_response.json = lambda: (
             {
                 "created": 1666322134,
@@ -978,7 +994,9 @@ class TestCodeOceanJob(unittest.TestCase):
         codeocean_job.run_job()
         mock_register_data.assert_called_once_with(
             request=self.basic_codeocean_job_config.register_config,
-            assets_viewable_to_everyone=codeocean_job.assets_viewable_to_everyone,
+            assets_viewable_to_everyone=(
+                codeocean_job.assets_viewable_to_everyone
+            ),
         )
 
         mock_process_data.assert_called_once_with(
@@ -992,7 +1010,8 @@ class TestCodeOceanJob(unittest.TestCase):
         )
 
     @patch(
-        "aind_codeocean_utils.api_handler.APIHandler.create_data_asset_and_update_permissions"
+        "aind_codeocean_utils.api_handler.APIHandler."
+        "create_data_asset_and_update_permissions"
     )
     @patch("aind_codeocean_utils.codeocean_job.CodeOceanJob.process_data")
     def test_run_job_input_data(
@@ -1045,13 +1064,14 @@ class TestCodeOceanJob(unittest.TestCase):
 
         codeocean_job.run_job()
         mock_register_data.assert_called_once_with(
-            request=self.basic_input_mount_codeocean_job_config.register_config,
-            assets_viewable_to_everyone=codeocean_job.assets_viewable_to_everyone,
+            request=(
+                self.basic_input_mount_codeocean_job_config.register_config
+            ),
+            assets_viewable_to_everyone=(
+                codeocean_job.assets_viewable_to_everyone
+            ),
         )
 
-        process_config = (
-            self.basic_input_mount_codeocean_job_config.process_config
-        )
         mock_process_data.assert_called_once_with(
             register_data_response=some_register_response
         )
@@ -1059,7 +1079,8 @@ class TestCodeOceanJob(unittest.TestCase):
     @patch("aind_codeocean_utils.codeocean_job.CodeOceanJob.register_data")
     @patch("aind_codeocean_utils.codeocean_job.CodeOceanJob.process_data")
     @patch(
-        "aind_codeocean_utils.api_handler.APIHandler.create_data_asset_and_update_permissions"
+        "aind_codeocean_utils.api_handler.APIHandler."
+        "create_data_asset_and_update_permissions"
     )
     def test_run_job_no_registration(
         self,
@@ -1127,7 +1148,8 @@ class TestCodeOceanJob(unittest.TestCase):
 
     @patch("aind_codeocean_utils.codeocean_job.CodeOceanJob.capture_result")
     @patch(
-        "aind_codeocean_utils.api_handler.APIHandler.create_data_asset_and_update_permissions"
+        "aind_codeocean_utils.api_handler.APIHandler."
+        "create_data_asset_and_update_permissions"
     )
     @patch("aind_codeocean_utils.codeocean_job.CodeOceanJob.process_data")
     @patch("aind_codeocean_api.codeocean.CodeOceanClient.get_data_asset")
@@ -1189,7 +1211,8 @@ class TestCodeOceanJob(unittest.TestCase):
 
     @patch("aind_codeocean_utils.codeocean_job.CodeOceanJob.capture_result")
     @patch(
-        "aind_codeocean_utils.api_handler.APIHandler.create_data_asset_and_update_permissions"
+        "aind_codeocean_utils.api_handler.APIHandler."
+        "create_data_asset_and_update_permissions"
     )
     @patch("aind_codeocean_utils.codeocean_job.CodeOceanJob.process_data")
     @patch("aind_codeocean_api.codeocean.CodeOceanClient.get_data_asset")

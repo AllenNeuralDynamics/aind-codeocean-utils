@@ -7,8 +7,7 @@ import logging
 import time
 from datetime import datetime
 from enum import Enum
-from typing import List, Optional, Tuple, Union
-from enum import Enum
+from typing import List, Optional, Tuple
 
 import requests
 from aind_codeocean_api.codeocean import CodeOceanClient
@@ -89,7 +88,9 @@ class CaptureConfig(BaseModel):
 
     request: Optional[CreateDataAssetRequest] = Field(
         default=None,
-        description="Request to create a data asset based on a processed result.",
+        description=(
+            "Request to create a data asset based on a processed result."
+        ),
     )
 
     process_name: Optional[str] = Field(
@@ -122,6 +123,9 @@ class CodeOceanJob:
     def __init__(
         self, co_client: CodeOceanClient, job_config: CodeOceanJobConfig
     ):
+        """
+        The CodeOceanJob constructor
+        """
         job_config = job_config.model_copy(deep=True)
         self.api_handler = APIHandler(co_client=co_client)
         self.register_config = job_config.register_config
