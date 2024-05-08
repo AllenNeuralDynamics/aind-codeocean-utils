@@ -53,7 +53,6 @@ def add_data_level_metadata(
     custom_metadata: dict = None,
 ) -> Tuple[List[str], dict]:
     """Add data level metadata to tags and custom metadata."""
-
     tags = set(tags or [])
     tags.add(data_level.value)
 
@@ -199,6 +198,15 @@ class CodeOceanJob:
 
         if self.process_config.request.data_assets is None:
             self.process_config.request.data_assets = []
+        else:
+            assert isinstance(
+                self.process_config.request.data_assets, list
+            ), "data_assets must be a list"
+            if isinstance(self.process_config.request.data_assets[0], dict):
+                self.process_config.request.data_assets = [
+                    ComputationDataAsset(**asset)
+                    for asset in self.process_config.request.data_assets
+                ]
 
         if register_data_response:
             input_data_asset_id = register_data_response.json()["id"]
@@ -277,8 +285,52 @@ class CodeOceanJob:
                 asset_name = self.capture_config.input_data_asset_name
             elif self.register_config is not None:
                 asset_name = build_processed_data_asset_name(
-                    self.capture_config.process_name, self.register_config.name
+                    self.register_config.name,
+                    self.capture_config.process_name,
                 )
+                # add input tags and custom metadata to result asset
+                create_data_asset_request.tags.extend(
+                    self.register_config.tags
+                )
+                create_data_asset_request.custom_metadata.update(
+                    self.register_config.custom_metadata
+                )
+            elif self.process_config is not None:
+                assert isinstance(
+                    self.process_config.request.data_assets, list
+                ), "data_assets must be a list"
+                # make sure data_assets is a list of ComputationDataAsset
+                if isinstance(
+                    self.process_config.request.data_assets[0], dict
+                ):
+                    self.process_config.request.data_assets = [
+                        ComputationDataAsset(**asset)
+                        for asset in self.process_config.request.data_assets
+                    ]
+                data_asset_ids = self.process_config.request.data_assets
+                # for single input data asset, use input data asset name
+                if data_asset_ids is not None and len(data_asset_ids) == 1:
+                    data_asset_id = data_asset_ids[0].id
+                    response = self.api_handler.co_client.get_data_asset(
+                        data_asset_id
+                    )
+                    response_json = response.json()
+                    input_data_asset_name = response_json["name"]
+                    asset_name = build_processed_data_asset_name(
+                        input_data_asset_name, self.capture_config.process_name
+                    )
+                    # add input tags and custom metadata to result asset
+                    create_data_asset_request.tags.extend(
+                        response_json.get("tags", [])
+                    )
+                    create_data_asset_request.custom_metadata.update(
+                        response_json.get("custom_metadata", {})
+                    )
+                else:
+                    raise AssertionError(
+                        "Data asset name not provided and multiple data assets"
+                        " were provided in the process configuration"
+                    )
             else:
                 raise AssertionError("Data asset name not provided")
 

@@ -52,8 +52,8 @@ class TestCodeOceanJob(unittest.TestCase):
                 capsule_id="123-abc",
                 pipeline_id=None,
                 data_assets=[
-                    ComputationDataAsset(id="999888", mount="some_mount"),
-                    ComputationDataAsset(id="12345", mount="some_mount_2"),
+                    dict(id="999888", mount="some_mount"),
+                    dict(id="12345", mount="some_mount_2"),
                 ],
                 parameters=["param1", "param2"],
             )
@@ -87,7 +87,7 @@ class TestCodeOceanJob(unittest.TestCase):
                 capsule_id=None,
                 pipeline_id="123-abc",
                 data_assets=[
-                    ComputationDataAsset(id="12345", mount="some_mount_2"),
+                    dict(id="12345", mount="some_mount_2"),
                 ],
                 parameters=["param1", "param2"],
                 version=3,
@@ -159,11 +159,6 @@ class TestCodeOceanJob(unittest.TestCase):
             process_config=basic_process_config_no_assets,
             capture_config=basic_capture_config_no_request,
         )
-        cls.none_vals_codeocean_job_config = CodeOceanJobConfig(
-            register_config=basic_register_data_config,
-            process_config=basic_process_config,
-            capture_config=none_vals_capture_config,
-        )
         cls.no_reg_codeocean_job_config_no_asset_name = CodeOceanJobConfig(
             register_config=None,
             process_config=basic_process_config,
@@ -177,11 +172,16 @@ class TestCodeOceanJob(unittest.TestCase):
         cls.one_asset_codeocean_job_config = CodeOceanJobConfig(
             register_config=None,
             process_config=basic_process_data_one_asset_config,
-            capture_config=basic_capture_config,
+            capture_config=basic_capture_config_no_request,
         )
-        cls.none_vals_codeocean_job_config = CodeOceanJobConfig(
+        cls.multi_asset_codeocean_job_config = CodeOceanJobConfig(
             register_config=None,
-            process_config=basic_process_data_one_asset_config,
+            process_config=basic_process_config,
+            capture_config=none_vals_capture_config,
+        )
+        cls.no_process_codeocean_job_config = CodeOceanJobConfig(
+            register_config=None,
+            process_config=None,
             capture_config=none_vals_capture_config,
         )
 
@@ -581,7 +581,7 @@ class TestCodeOceanJob(unittest.TestCase):
         mock_create_data_asset: MagicMock,
         mock_sleep: MagicMock,
     ):
-        """Tests _capture_result"""
+        """Tests capture_results"""
         fake_data_asset_id = "abc-123"
 
         some_create_data_asset_response = requests.Response()
@@ -666,6 +666,7 @@ class TestCodeOceanJob(unittest.TestCase):
 
     @patch("time.sleep", return_value=None)
     @patch("aind_codeocean_api.codeocean.CodeOceanClient.create_data_asset")
+    @patch("aind_codeocean_api.codeocean.CodeOceanClient.get_data_asset")
     @patch("aind_codeocean_api.codeocean.CodeOceanClient.update_permissions")
     @patch(
         "aind_codeocean_utils.api_handler.APIHandler."
@@ -675,10 +676,11 @@ class TestCodeOceanJob(unittest.TestCase):
         self,
         mock_wait_for_data_availability: MagicMock,
         mock_update_permissions: MagicMock,
+        mock_get_data_asset: MagicMock,
         mock_create_data_asset: MagicMock,
         mock_sleep: MagicMock,
     ):
-        """Tests _capture_result with additional tags and metadata"""
+        """Tests capture_results with additional tags and metadata"""
         fake_data_asset_id = "abc-123"
         #
         some_create_data_asset_response = requests.Response()
@@ -777,8 +779,56 @@ class TestCodeOceanJob(unittest.TestCase):
         )
         mock_sleep.assert_not_called()
 
+        some_get_data_asset_response = requests.Response()
+        some_get_data_asset_response.status_code = 200
+        some_get_data_asset_response.json = lambda: (
+            {
+                "name": "some_custom_asset_name",
+                "tags": ["my-custom-input-tag"],
+                "custom_metadata": {"data level": "raw", "key1": "value1"},
+            }
+        )
+        mock_get_data_asset.return_value = some_get_data_asset_response
+
+        # test inheriting tags and metadata from input data asset
+        mock_create_data_asset.reset_mock()
+        codeocean_job = CodeOceanJob(
+            co_client=self.co_client,
+            job_config=self.one_asset_codeocean_job_config,
+        )
+        codeocean_job.capture_result(process_response=some_process_response)
+
+        captured_asset_name = build_processed_data_asset_name(
+            "some_custom_asset_name", codeocean_job.capture_config.process_name
+        )
+        mock_create_data_asset.assert_has_calls(
+            [
+                call(
+                    CreateDataAssetRequest(
+                        name=captured_asset_name,
+                        tags=["derived", "my-custom-input-tag"],
+                        mount=captured_asset_name,
+                        description=None,
+                        source=Source(
+                            aws=None,
+                            gcp=None,
+                            computation=Sources.Computation(
+                                id="124fq", path=None
+                            ),
+                        ),
+                        target=None,
+                        custom_metadata={
+                            "data level": "derived",
+                            "key1": "value1",
+                        },
+                    )
+                )
+            ]
+        )
+
     @patch("time.sleep", return_value=None)
     @patch("aind_codeocean_api.codeocean.CodeOceanClient.create_data_asset")
+    @patch("aind_codeocean_api.codeocean.CodeOceanClient.get_data_asset")
     @patch("aind_codeocean_api.codeocean.CodeOceanClient.update_permissions")
     @patch(
         "aind_codeocean_utils.api_handler.APIHandler."
@@ -788,10 +838,11 @@ class TestCodeOceanJob(unittest.TestCase):
         self,
         mock_wait_for_data_availability: MagicMock,
         mock_update_permissions: MagicMock,
+        mock_get_data_asset: MagicMock,
         mock_create_data_asset: MagicMock,
         mock_sleep: MagicMock,
     ):
-        """Tests _capture_result with asset_name and mount set to None"""
+        """Tests capture_results with asset_name and mount set to None"""
         fake_data_asset_id = "abc-123"
 
         some_create_data_asset_response = requests.Response()
@@ -853,18 +904,22 @@ class TestCodeOceanJob(unittest.TestCase):
             }
         )
 
+        # Test getting asset name from attached data asset
+        some_get_data_asset_response = requests.Response()
+        some_get_data_asset_response.status_code = 200
+        some_get_data_asset_response.json = lambda: (
+            {
+                "name": "some_input_data_asset_name",
+            }
+        )
+        mock_get_data_asset.return_value = some_get_data_asset_response
+
         codeocean_job = CodeOceanJob(
             co_client=self.co_client,
-            job_config=self.none_vals_codeocean_job_config,
+            job_config=self.one_asset_codeocean_job_config,
         )
-        with self.assertRaises(AssertionError) as e:
-            codeocean_job.capture_result(
-                process_response=some_process_response
-            )
-        self.assertEqual(
-            ("AssertionError('Data asset name not provided')"),
-            repr(e.exception),
-        )
+
+        codeocean_job.capture_result(process_response=some_process_response)
 
         codeocean_job.capture_config.input_data_asset_name = (
             "some_input_data_asset_name"
@@ -874,6 +929,36 @@ class TestCodeOceanJob(unittest.TestCase):
         )
         self.assertEqual(some_create_data_asset_response, actual_response)
         mock_sleep.assert_not_called()
+
+        # Test exception when multiple input data assets is not provided
+        codeocean_job = CodeOceanJob(
+            co_client=self.co_client,
+            job_config=self.multi_asset_codeocean_job_config,
+        )
+        with self.assertRaises(AssertionError) as e:
+            codeocean_job.capture_result(
+                process_response=some_process_response
+            )
+        self.assertEqual(
+            (
+                "AssertionError('Data asset name not provided and multiple "
+                "data assets were provided in the process configuration')"
+            ),
+            repr(e.exception),
+        )
+        # Test exception when no input data assets is provided
+        codeocean_job = CodeOceanJob(
+            co_client=self.co_client,
+            job_config=self.no_process_codeocean_job_config,
+        )
+        with self.assertRaises(AssertionError) as e:
+            codeocean_job.capture_result(
+                process_response=some_process_response
+            )
+        self.assertEqual(
+            ("AssertionError('Data asset name not provided')"),
+            repr(e.exception),
+        )
 
     @patch("time.sleep", return_value=None)
     @patch("aind_codeocean_api.codeocean.CodeOceanClient.create_data_asset")
@@ -889,7 +974,7 @@ class TestCodeOceanJob(unittest.TestCase):
         mock_create_data_asset: MagicMock,
         mock_sleep: MagicMock,
     ):
-        """Tests _capture_result with failed registration step"""
+        """Tests capture_results with failed registration step"""
         some_create_data_asset_response = requests.Response()
         some_create_data_asset_response.status_code = 500
         some_create_data_asset_response.json = lambda: (
@@ -949,7 +1034,7 @@ class TestCodeOceanJob(unittest.TestCase):
         mock_create_data_asset: MagicMock,
         mock_sleep: MagicMock,
     ):
-        """Tests _capture_result with wait_for_data failure"""
+        """Tests capture_results with wait_for_data failure"""
         fake_data_asset_id = "abc-123"
 
         some_create_data_asset_response = requests.Response()
@@ -1078,7 +1163,7 @@ class TestCodeOceanJob(unittest.TestCase):
         )
 
         # the process_data will propagate the additional_tags and
-        # additional_custom_metadata to the _capture_result method
+        # additional_custom_metadata to the capture_results method
         mock_capture_result.assert_called_once_with(
             process_response=some_run_response
         )
@@ -1216,7 +1301,10 @@ class TestCodeOceanJob(unittest.TestCase):
             codeocean_job.run_job()
 
         self.assertEqual(
-            ("AssertionError('Data asset name not provided')"),
+            (
+                "AssertionError('Data asset name not provided and multiple "
+                "data assets were provided in the process configuration')"
+            ),
             repr(e.exception),
         )
 
@@ -1278,7 +1366,7 @@ class TestCodeOceanJob(unittest.TestCase):
         mock_register_data.assert_not_called()
         mock_process_data.assert_called_once_with(register_data_response=None)
         # the process_data will propagate the additional_tags and
-        # additional_custom_metadata to the _capture_result method
+        # additional_custom_metadata to the capture_results method
         mock_capture_result.assert_called_once_with(
             process_response=some_run_response
         )
@@ -1335,13 +1423,13 @@ class TestCodeOceanJob(unittest.TestCase):
 
         codeocean_job = CodeOceanJob(
             co_client=self.co_client,
-            job_config=self.none_vals_codeocean_job_config,
+            job_config=self.one_asset_codeocean_job_config,
         )
         codeocean_job.run_job()
         mock_register_data.assert_not_called()
         mock_process_data.assert_called_once_with(register_data_response=None)
         # the process_data will propagate the additional_tags and
-        # additional_custom_metadata to the _capture_result method
+        # additional_custom_metadata to the capture_results method
         mock_capture_result.assert_called_once_with(
             process_response=some_run_response
         )
