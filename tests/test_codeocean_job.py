@@ -31,7 +31,7 @@ class TestCodeOceanJob(unittest.TestCase):
     def setUpClass(cls):
         """Set up basic configs that can be used across all tests."""
         basic_register_data_config = CreateDataAssetRequest(
-            name="some_asset_name",
+            name="platform_subject_date_time",
             mount="deleteme",
             source=Source(
                 aws=Sources.AWS(
@@ -1146,13 +1146,19 @@ class TestCodeOceanJob(unittest.TestCase):
         )
         mock_process_data.return_value = some_run_response
 
+        # self.basic_codeocean_job_config.add_subject_platform_metadata = False
         codeocean_job = CodeOceanJob(
             co_client=self.co_client,
             job_config=self.basic_codeocean_job_config,
         )
         codeocean_job.run_job()
+        request = self.basic_codeocean_job_config.register_config
+        request.tags = sorted(request.tags + ["platform", "subject"])
+        request.custom_metadata.update(
+            {'experiment type': 'platform', 'subject id': 'subject'}
+        )
         mock_register_data.assert_called_once_with(
-            request=self.basic_codeocean_job_config.register_config,
+            request=request,
             assets_viewable_to_everyone=(
                 codeocean_job.assets_viewable_to_everyone
             ),
@@ -1216,6 +1222,8 @@ class TestCodeOceanJob(unittest.TestCase):
         )
         mock_process_data.return_value = some_run_response
 
+        self.basic_input_mount_codeocean_job_config.\
+            add_subject_platform_metadata = False
         codeocean_job = CodeOceanJob(
             co_client=self.co_client,
             job_config=self.basic_input_mount_codeocean_job_config,

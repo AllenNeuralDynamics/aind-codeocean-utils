@@ -39,6 +39,30 @@ class CustomMetadataKeys(str, Enum):
     DATA_LEVEL = "data level"
 
 
+def construct_asset_tags_and_metadata(
+    asset_name: str, tags: list = None, custom_metadata: dict = None
+) -> tuple:
+    """Construct metadata for new data assets"""
+    tags = set(tags) if tags is not None else set()
+    custom_metadata = custom_metadata or dict()
+    custom_metadata = custom_metadata.copy()
+
+    tokens = asset_name.split("_")
+    if len(tokens) >= 2:
+        platform, subject_id = tokens[0], tokens[1]
+
+        tags.update((platform, subject_id))
+
+        custom_metadata.update(
+            {
+                "experiment type": platform,
+                "subject id": subject_id,
+            }
+        )
+
+    return tags, custom_metadata
+
+
 def build_processed_data_asset_name(input_data_asset_name, process_name):
     """Build a name for a processed data asset."""
 
@@ -74,10 +98,31 @@ class ProcessConfig(BaseModel):
     Settings for processing data
     """
 
-    request: RunCapsuleRequest
-    input_data_asset_mount: Optional[str] = None
-    poll_interval_seconds: Optional[int] = 300
-    timeout_seconds: Optional[int] = None
+    request: RunCapsuleRequest = Field(
+        description="Request to run a capsule or pipeline."
+    )
+    input_data_asset_mount: Optional[str] = Field(
+        default=None,
+        description=(
+            "Mount point for the input data asset. "
+            "This is only used to specify the mount of a newly registered "
+            "data asset."
+        ),
+    )
+    poll_interval_seconds: Optional[int] = Field(
+        default=300,
+        description=(
+            "Time in seconds to wait between polling for the completion of "
+            "the computation."
+        ),
+    )
+    timeout_seconds: Optional[int] = Field(
+        default=None,
+        description=(
+            "Time in seconds to wait for the computation to complete. "
+            "If None, the computation will be polled indefinitely."
+        ),
+    )
 
 
 class CaptureConfig(BaseModel):
@@ -109,8 +154,28 @@ class CodeOceanJobConfig(BaseModel):
     register_config: Optional[CreateDataAssetRequest] = None
     process_config: Optional[ProcessConfig] = None
     capture_config: Optional[CaptureConfig] = None
-    assets_viewable_to_everyone: bool = True
-    add_data_level_tags: bool = True
+    assets_viewable_to_everyone: bool = Field(
+        default=True,
+        description=(
+            "Whether the assets should be viewable to everyone. "
+            "If True, the assets will be viewable to everyone. "
+            "If False, the assets will be viewable only to the user who "
+            "registered them."
+        ),
+    )
+    add_subject_and_platform_metadata: bool = Field(
+        default=True,
+        description=(
+            "Whether to add metadata about the subject and platform to the "
+            "data assets."
+        ),
+    )
+    add_data_level_metadata: bool = Field(
+        default=True,
+        description=(
+            "Whether to add metadata about the data level to the data assets."
+        ),
+    )
 
 
 class CodeOceanJob:
@@ -133,7 +198,10 @@ class CodeOceanJob:
         self.assets_viewable_to_everyone = (
             job_config.assets_viewable_to_everyone
         )
-        self.add_data_level_tags = job_config.add_data_level_tags
+        self.add_data_level_metadata = job_config.add_data_level_metadata
+        self.add_subject_and_platform_metadata = (
+            job_config.add_subject_and_platform_metadata
+        )
 
     def run_job(self):
         """Run the job."""
@@ -168,14 +236,20 @@ class CodeOceanJob:
         self, request: CreateDataAssetRequest
     ) -> requests.Response:
         """Register the data asset, also handling metadata tagging."""
-        if self.add_data_level_tags:
+        tags = request.tags or []
+        custom_metadata = request.custom_metadata or {}
+        if self.add_subject_and_platform_metadata:
+            tags, custom_metadata = construct_asset_tags_and_metadata(
+                request.name, tags, custom_metadata
+            )
+        if self.add_data_level_metadata:
             tags, custom_metadata = add_data_level_metadata(
                 DataLevel.RAW,
-                request.tags,
-                request.custom_metadata,
+                tags,
+                custom_metadata,
             )
-            request.tags = tags
-            request.custom_metadata = custom_metadata
+        request.tags = tags
+        request.custom_metadata = custom_metadata
 
         # TODO handle non-aws sources
         if request.source.aws is not None:
@@ -343,7 +417,7 @@ class CodeOceanJob:
             computation=Sources.Computation(id=computation_id)
         )
 
-        if self.add_data_level_tags:
+        if self.add_data_level_metadata:
             tags, custom_metadata = add_data_level_metadata(
                 DataLevel.DERIVED,
                 create_data_asset_request.tags,
