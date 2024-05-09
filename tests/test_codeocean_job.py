@@ -1146,7 +1146,7 @@ class TestCodeOceanJob(unittest.TestCase):
         )
         mock_process_data.return_value = some_run_response
 
-        # self.basic_codeocean_job_config.add_subject_platform_metadata = False
+        # self.basic_codeocean_job_config.add_subject_and_platform_metadata = False
         codeocean_job = CodeOceanJob(
             co_client=self.co_client,
             job_config=self.basic_codeocean_job_config,
@@ -1223,7 +1223,7 @@ class TestCodeOceanJob(unittest.TestCase):
         mock_process_data.return_value = some_run_response
 
         self.basic_input_mount_codeocean_job_config.\
-            add_subject_platform_metadata = False
+            add_subject_and_platform_metadata = False
         codeocean_job = CodeOceanJob(
             co_client=self.co_client,
             job_config=self.basic_input_mount_codeocean_job_config,
