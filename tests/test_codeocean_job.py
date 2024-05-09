@@ -1146,7 +1146,6 @@ class TestCodeOceanJob(unittest.TestCase):
         )
         mock_process_data.return_value = some_run_response
 
-        # self.basic_codeocean_job_config.add_subject_and_platform_metadata = False
         codeocean_job = CodeOceanJob(
             co_client=self.co_client,
             job_config=self.basic_codeocean_job_config,
@@ -1155,7 +1154,7 @@ class TestCodeOceanJob(unittest.TestCase):
         request = self.basic_codeocean_job_config.register_config
         request.tags = sorted(request.tags + ["platform", "subject"])
         request.custom_metadata.update(
-            {'experiment type': 'platform', 'subject id': 'subject'}
+            {"experiment type": "platform", "subject id": "subject"}
         )
         mock_register_data.assert_called_once_with(
             request=request,
