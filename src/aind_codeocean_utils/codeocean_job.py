@@ -329,10 +329,10 @@ class CodeOceanJob:
                 curr_computation_state = computation_response.json()
 
                 if (curr_computation_state["state"] == "completed") or (
-                    (self.process_timeout_seconds is not None)
+                    (self.timeout_seconds is not None)
                     and (
-                        self.process_poll_interval_seconds * num_checks
-                        >= self.process_timeout_seconds
+                        self.poll_interval_seconds * num_checks
+                        >= self.timeout_seconds
                     )
                 ):
                     executing = False
