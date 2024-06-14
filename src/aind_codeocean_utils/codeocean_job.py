@@ -354,7 +354,10 @@ class CodeOceanJob:
 
         if create_data_asset_request.name is None:
             if self.capture_config.input_data_asset_name is not None:
-                asset_name = self.capture_config.input_data_asset_name
+                asset_name = build_processed_data_asset_name(
+                    self.capture_config.input_data_asset_name,
+                    self.capture_config.process_name
+                )
             elif self.register_config is not None:
                 asset_name = build_processed_data_asset_name(
                     self.register_config.name,
