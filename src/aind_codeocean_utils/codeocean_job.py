@@ -20,10 +20,8 @@ from aind_codeocean_api.models.data_assets_requests import (
     Source,
     Sources,
 )
-from aind_data_schema.core.data_description import (
-    DataLevel,
-    datetime_to_name_string,
-)
+from aind_data_schema.core.data_description import DataLevel
+from aind_data_schema_models.data_name_patterns import datetime_to_name_string
 from pydantic import BaseModel, Field
 
 from aind_codeocean_utils.api_handler import APIHandler
