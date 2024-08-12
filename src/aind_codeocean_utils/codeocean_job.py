@@ -336,7 +336,7 @@ class CodeOceanJob:
                     executing = False
         return run_capsule_response
 
-    def capture_result(
+    def capture_result(  # noqa: C901
         self, process_response: requests.Response
     ) -> requests.Response:
         """Capture the result of the processing that just finished."""
@@ -352,13 +352,10 @@ class CodeOceanJob:
                 custom_metadata={},
             )
 
+        input_data_asset_name = self.capture_config.input_data_asset_name
+
         if create_data_asset_request.name is None:
-            if self.capture_config.input_data_asset_name is not None:
-                asset_name = build_processed_data_asset_name(
-                    self.capture_config.input_data_asset_name,
-                    self.capture_config.process_name
-                )
-            elif self.register_config is not None:
+            if self.register_config is not None:
                 asset_name = build_processed_data_asset_name(
                     self.register_config.name,
                     self.capture_config.process_name,
@@ -370,44 +367,58 @@ class CodeOceanJob:
                 create_data_asset_request.custom_metadata.update(
                     self.register_config.custom_metadata
                 )
-            elif self.process_config is not None:
-                assert isinstance(
-                    self.process_config.request.data_assets, list
-                ), "data_assets must be a list"
-                # make sure data_assets is a list of ComputationDataAsset
-                if isinstance(
-                    self.process_config.request.data_assets[0], dict
-                ):
-                    self.process_config.request.data_assets = [
-                        ComputationDataAsset(**asset)
-                        for asset in self.process_config.request.data_assets
-                    ]
+            elif (
+                self.process_config is not None
+                and self.process_config.request.data_assets is not None
+            ):
                 data_asset_ids = self.process_config.request.data_assets
                 # for single input data asset, use input data asset name
-                if data_asset_ids is not None and len(data_asset_ids) == 1:
-                    data_asset_id = data_asset_ids[0].id
+                assert isinstance(
+                    data_asset_ids, list
+                ), "data_assets must be a list"
+                # make sure data_assets is a list of ComputationDataAsset
+                if isinstance(data_asset_ids[0], dict):
+                    data_asset_ids = [
+                        ComputationDataAsset(**asset)
+                        for asset in data_asset_ids
+                    ]
+                if len(data_asset_ids) > 1 and input_data_asset_name is None:
+                    raise AssertionError(
+                        "Data asset name not provided and "
+                        "multiple data assets were provided in "
+                        "the process configuration"
+                    )
+                # for multiple input data assets,
+                # propagate all tags and custom metadata
+                existing_tags = []
+                existing_custom_metadata = {}
+                for data_asset_id in data_asset_ids:
                     response = self.api_handler.co_client.get_data_asset(
-                        data_asset_id
+                        data_asset_id.id
                     )
                     response_json = response.json()
-                    input_data_asset_name = response_json["name"]
-                    asset_name = build_processed_data_asset_name(
-                        input_data_asset_name, self.capture_config.process_name
-                    )
-                    # add input tags and custom metadata to result asset
-                    create_data_asset_request.tags.extend(
-                        response_json.get("tags", [])
-                    )
-                    create_data_asset_request.custom_metadata.update(
+                    existing_tags.extend(response_json.get("tags", []))
+                    existing_custom_metadata.update(
                         response_json.get("custom_metadata", {})
                     )
-                else:
-                    raise AssertionError(
-                        "Data asset name not provided and multiple data assets"
-                        " were provided in the process configuration"
+                if len(data_asset_ids) == 1:
+                    response_json = response.json()
+                    input_data_asset_name = (
+                        input_data_asset_name or response_json["name"]
                     )
+                asset_name = build_processed_data_asset_name(
+                    input_data_asset_name,
+                    self.capture_config.process_name,
+                )
+                # add input tags and custom metadata to result asset
+                create_data_asset_request.tags.extend(existing_tags)
+                create_data_asset_request.custom_metadata.update(
+                    existing_custom_metadata
+                )
             else:
-                raise AssertionError("Data asset name not provided")
+                assert input_data_asset_name is not None, (
+                    "Data asset name not provided"
+                )
 
             create_data_asset_request.name = asset_name
 
