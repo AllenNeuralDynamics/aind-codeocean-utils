@@ -1,10 +1,18 @@
 """Module of classes to handle interfacing with the Code Ocean index."""
 
 import logging
+import time
 from datetime import datetime
 from typing import Dict, Iterator, List, Optional
 
+import requests
 from aind_codeocean_api.codeocean import CodeOceanClient
+from aind_codeocean_api.models.computations_requests import (
+    ComputationDataAsset,
+)
+from aind_codeocean_api.models.data_assets_requests import (
+    CreateDataAssetRequest,
+)
 from botocore.client import BaseClient
 
 
@@ -240,3 +248,130 @@ class APIHandler:
             Bucket=bucket, Prefix=prefix, Delimiter="/", MaxKeys=1
         )
         return "CommonPrefixes" in resp
+
+    def wait_for_data_availability(
+        self,
+        data_asset_id: str,
+        timeout_seconds: int = 300,
+        pause_interval=10,
+    ) -> requests.Response:
+        """
+        There is a lag between when a register data request is made and
+        when the data is available to be used in a capsule.
+        Parameters
+        ----------
+        data_asset_id : str
+            ID of the data asset to check for.
+        timeout_seconds : int
+            Roughly how long the method should check if the data is available.
+        pause_interval : int
+            How many seconds between when the backend is queried.
+
+        Returns
+        -------
+        requests.Response
+
+        """
+
+        num_of_checks = 0
+        break_flag = False
+        time.sleep(pause_interval)
+        response = self.co_client.get_data_asset(data_asset_id)
+        if ((pause_interval * num_of_checks) > timeout_seconds) or (
+            response.status_code == 200
+        ):
+            break_flag = True
+        while not break_flag:
+            time.sleep(pause_interval)
+            response = self.co_client.get_data_asset(data_asset_id)
+            num_of_checks += 1
+            if ((pause_interval * num_of_checks) > timeout_seconds) or (
+                response.status_code == 200
+            ):
+                break_flag = True
+        return response
+
+    def check_data_assets(
+        self, data_assets: List[ComputationDataAsset]
+    ) -> None:
+        """
+        Check if data assets exist.
+
+        Parameters
+        ----------
+        data_assets : list
+            List of data assets to check for.
+
+        Raises
+        ------
+        FileNotFoundError
+            If a data asset is not found.
+        ConnectionError
+            If there is an issue retrieving a data asset.
+        """
+        for data_asset in data_assets:
+            assert isinstance(
+                data_asset, ComputationDataAsset
+            ), "Data assets must be of type ComputationDataAsset"
+            data_asset_id = data_asset.id
+            response = self.co_client.get_data_asset(data_asset_id)
+            if response.status_code == 404:
+                raise FileNotFoundError(f"Unable to find: {data_asset_id}")
+            elif response.status_code != 200:
+                raise ConnectionError(
+                    f"There was an issue retrieving: {data_asset_id}"
+                )
+
+    def create_data_asset_and_update_permissions(
+        self,
+        request: CreateDataAssetRequest,
+        assets_viewable_to_everyone: bool = True,
+    ) -> requests.Response:
+        """
+        Register a data asset. Can also optionally update the permissions on
+        the data asset.
+
+        Parameters
+        ----------
+        request : CreateDataAssetRequest
+
+        Notes
+        -----
+        The credentials for the s3 bucket must be set in the environment.
+
+        Returns
+        -------
+        requests.Response
+        """
+
+        create_data_asset_response = self.co_client.create_data_asset(request)
+        create_data_asset_response_json = create_data_asset_response.json()
+
+        if create_data_asset_response_json.get("id") is None:
+            raise KeyError(
+                f"Something went wrong registering"
+                f" '{request.name}'. "
+                f"Response Status Code: "
+                f"{create_data_asset_response.status_code}. "
+                f"Response Message: {create_data_asset_response_json}"
+            )
+
+        if assets_viewable_to_everyone:
+            data_asset_id = create_data_asset_response_json["id"]
+            response_data_available = self.wait_for_data_availability(
+                data_asset_id
+            )
+
+            if response_data_available.status_code != 200:
+                raise FileNotFoundError(f"Unable to find: {data_asset_id}")
+
+            # Make data asset viewable to everyone
+            update_data_perm_response = self.co_client.update_permissions(
+                data_asset_id=data_asset_id, everyone="viewer"
+            )
+            logging.info(
+                "Permissions response: "
+                f"{update_data_perm_response.status_code}"
+            )
+
+        return create_data_asset_response
