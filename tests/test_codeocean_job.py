@@ -12,7 +12,9 @@ from aind_codeocean_api.models.computations_requests import (
 from aind_codeocean_api.models.data_assets_requests import (
     CreateDataAssetRequest,
     Source,
+    Target,
     Sources,
+    Targets,
 )
 
 from aind_codeocean_utils.codeocean_job import (
@@ -97,6 +99,7 @@ class TestCodeOceanJob(unittest.TestCase):
         )
         basic_capture_config = CaptureConfig(
             process_name="some_process",
+            output_bucket="some_output_bucket",
             request=CreateDataAssetRequest(
                 mount="some_mount",
                 name="some_asset_name",
@@ -108,7 +111,8 @@ class TestCodeOceanJob(unittest.TestCase):
             ),
         )
         basic_capture_config_no_request = CaptureConfig(
-            process_name="some_process", request=None
+            process_name="some_process",
+            request=None,
         )
         none_vals_capture_config = CaptureConfig(
             process_name="some_process",
@@ -771,7 +775,12 @@ class TestCodeOceanJob(unittest.TestCase):
                                 id="124fq", path=None
                             ),
                         ),
-                        target=None,
+                        target=Target(
+                            aws=Targets.AWS(
+                                bucket="some_output_bucket",
+                                prefix="some_asset_name",
+                            )
+                        ),
                         custom_metadata=capture_metadata_output,
                     )
                 )
@@ -1222,7 +1231,9 @@ class TestCodeOceanJob(unittest.TestCase):
         mock_process_data.return_value = some_run_response
 
         self.basic_input_mount_codeocean_job_config.\
-            add_subject_and_platform_metadata = False
+            add_subject_and_platform_metadata = (
+                False
+            )
         codeocean_job = CodeOceanJob(
             co_client=self.co_client,
             job_config=self.basic_input_mount_codeocean_job_config,

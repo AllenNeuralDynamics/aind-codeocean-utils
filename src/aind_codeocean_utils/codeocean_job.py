@@ -19,6 +19,8 @@ from aind_codeocean_api.models.data_assets_requests import (
     CreateDataAssetRequest,
     Source,
     Sources,
+    Target,
+    Targets,
 )
 from aind_data_schema.core.data_description import DataLevel
 from aind_data_schema_models.data_name_patterns import datetime_to_name_string
@@ -140,6 +142,9 @@ class CaptureConfig(BaseModel):
     )
     input_data_asset_name: Optional[str] = Field(
         default=None, description="Name of the input data asset."
+    )
+    output_bucket: Optional[str] = Field(
+        default=None, description="Name of the output bucket."
     )
 
 
@@ -353,6 +358,7 @@ class CodeOceanJob:
             )
 
         input_data_asset_name = self.capture_config.input_data_asset_name
+        output_bucket = self.capture_config.output_bucket
 
         if create_data_asset_request.name is None:
             if self.register_config is not None:
@@ -416,9 +422,9 @@ class CodeOceanJob:
                     existing_custom_metadata
                 )
             else:
-                assert input_data_asset_name is not None, (
-                    "Data asset name not provided"
-                )
+                assert (
+                    input_data_asset_name is not None
+                ), "Data asset name not provided"
 
             create_data_asset_request.name = asset_name
 
@@ -428,6 +434,12 @@ class CodeOceanJob:
         create_data_asset_request.source = Source(
             computation=Sources.Computation(id=computation_id)
         )
+
+        if output_bucket is not None:
+            prefix = create_data_asset_request.name
+            create_data_asset_request.target = Target(
+                aws=Targets.AWS(bucket=output_bucket, prefix=prefix)
+            )
 
         if self.add_data_level_metadata:
             tags, custom_metadata = add_data_level_metadata(
