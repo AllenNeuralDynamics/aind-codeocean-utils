@@ -275,15 +275,22 @@ class CodeOceanJob:
 
         if self.process_config.request.data_assets is None:
             self.process_config.request.data_assets = []
-        else:
-            assert isinstance(
-                self.process_config.request.data_assets, list
-            ), "data_assets must be a list"
+
+        assert isinstance(
+            self.process_config.request.data_assets, list
+        ), "data_assets must be a list"
+
+        if len(self.process_config.request.data_assets) > 0:
             if isinstance(self.process_config.request.data_assets[0], dict):
                 self.process_config.request.data_assets = [
                     ComputationDataAsset(**asset)
                     for asset in self.process_config.request.data_assets
                 ]
+        else:
+            assert register_data_response is not None, (
+                "No input data assets provided and no data asset was "
+                "registered upstream."
+            )
 
         if register_data_response:
             input_data_asset_id = register_data_response.json()["id"]
