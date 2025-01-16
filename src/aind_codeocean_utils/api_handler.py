@@ -289,34 +289,6 @@ class APIHandler:
                 break_flag = True
         return response
 
-    def check_data_assets(self, data_assets: List[InputDataAsset]) -> None:
-        """
-        Check if data assets exist.
-
-        Parameters
-        ----------
-        data_assets : list
-            List of data assets to check for.
-
-        Raises
-        ------
-        FileNotFoundError
-            If a data asset is not found.
-        ConnectionError
-            If there is an issue retrieving a data asset.
-        """
-        for data_asset in data_assets:
-            assert isinstance(
-                data_asset, InputDataAsset
-            ), "Data assets must be of type InputDataAsset"
-            data_asset_id = data_asset.id
-            response = self.co_client.data_assets.get_data_asset(data_asset_id)
-            if response.status_code == 404:
-                raise FileNotFoundError(f"Unable to find: {data_asset_id}")
-            elif response.status_code != 200:
-                raise ConnectionError(
-                    f"There was an issue retrieving: {data_asset_id}"
-                )
 
     def create_data_asset_and_update_permissions(
         self,
