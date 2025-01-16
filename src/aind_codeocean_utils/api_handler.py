@@ -8,7 +8,6 @@ from typing import Dict, Iterator, List, Optional
 import requests
 from botocore.client import BaseClient
 from codeocean import CodeOcean
-from codeocean.computation import InputDataAsset
 from codeocean.data_asset import DataAssetUpdateParams
 
 
