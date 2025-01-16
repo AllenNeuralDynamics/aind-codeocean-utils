@@ -7,7 +7,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, call, patch
 
-from aind_codeocean_api.codeocean import CodeOceanClient
+from codeocean import CodeOcean
 from requests import Response
 
 from aind_codeocean_utils.api_handler import APIHandler
@@ -24,7 +24,7 @@ class TestAPIHandler(unittest.TestCase):
         """Load mock_db before running tests."""
 
         co_mock_token = "abc-123"
-        co_mock_domain = "https://aind.codeocean.com"
+        co_mock_domain = "https://aind.com"
 
         with open(MOCK_RESPONSE_FILE) as f:
             json_contents = json.load(f)
@@ -33,9 +33,7 @@ class TestAPIHandler(unittest.TestCase):
         mock_search_all_data_assets_success_response._content = json.dumps(
             json_contents["search_all_data_assets"]
         ).encode("utf-8")
-        mock_co_client = CodeOceanClient(
-            domain=co_mock_domain, token=co_mock_token
-        )
+        mock_co_client = CodeOcean(domain=co_mock_domain, token=co_mock_token)
         mock_s3_client = MagicMock()
         cls.mock_search_all_data_assets_success_response = (
             mock_search_all_data_assets_success_response
@@ -46,10 +44,8 @@ class TestAPIHandler(unittest.TestCase):
             co_client=mock_co_client, s3=mock_s3_client
         )
 
-    @patch(
-        "aind_codeocean_api.codeocean.CodeOceanClient.search_all_data_assets"
-    )
-    @patch("aind_codeocean_api.codeocean.CodeOceanClient.update_data_asset")
+    @patch("codeocean.data_asset.DataAssets.search_data_assets")
+    @patch("codeocean.data_asset.DataAssets.update_metadata")
     @patch("logging.debug")
     @patch("logging.info")
     def test_update_tags(
@@ -67,7 +63,7 @@ class TestAPIHandler(unittest.TestCase):
         mock_update_response.status_code = 200
         mock_update_response._content = b'{"message": "success"}'
         mock_update.return_value = mock_update_response
-        response = self.api_handler.co_client.search_all_data_assets()
+        response = self.api_handler.co_client.data_assets.search_data_assets()
         data_assets = response.json()["results"]
         self.api_handler.update_tags(
             tags_to_remove=["test"],
@@ -145,10 +141,8 @@ class TestAPIHandler(unittest.TestCase):
             [call({"message": "success"}) for _ in data_assets]
         )
 
-    @patch(
-        "aind_codeocean_api.codeocean.CodeOceanClient.search_all_data_assets"
-    )
-    @patch("aind_codeocean_api.codeocean.CodeOceanClient.update_data_asset")
+    @patch("codeocean.data_asset.DataAssets.search_data_assets")
+    @patch("codeocean.data_asset.DataAssets.update_metadata")
     @patch("logging.debug")
     @patch("logging.info")
     def test_update_tags_with_nones(
@@ -166,7 +160,7 @@ class TestAPIHandler(unittest.TestCase):
         mock_update_response.status_code = 200
         mock_update_response._content = b'{"message": "success"}'
         mock_update.return_value = mock_update_response
-        response = self.api_handler.co_client.search_all_data_assets()
+        response = self.api_handler.co_client.data_assets.search_data_assets()
         data_assets = response.json()["results"]
         self.api_handler.update_tags(
             tags_to_add=["new_tag"],
@@ -238,10 +232,8 @@ class TestAPIHandler(unittest.TestCase):
         mock_log_info.assert_called()
         mock_log_debug.assert_called()
 
-    @patch(
-        "aind_codeocean_api.codeocean.CodeOceanClient.search_all_data_assets"
-    )
-    @patch("aind_codeocean_api.codeocean.CodeOceanClient.update_data_asset")
+    @patch("codeocean.data_asset.DataAssets.search_data_assets")
+    @patch("codeocean.data_asset.DataAssets.update_metadata")
     @patch("logging.debug")
     @patch("logging.info")
     def test_update_tags_dryrun(
@@ -255,7 +247,9 @@ class TestAPIHandler(unittest.TestCase):
         mock_get.return_value = (
             self.mock_search_all_data_assets_success_response
         )
-        response = self.api_handler_dry.co_client.search_all_data_assets()
+        response = (
+            self.api_handler_dry.co_client.data_assets.search_data_assets()
+        )
         data_assets = response.json()["results"]
         self.api_handler_dry.update_tags(
             tags_to_remove=["test"],
@@ -288,9 +282,7 @@ class TestAPIHandler(unittest.TestCase):
         )
         self.assertTrue(resp)
 
-    @patch(
-        "aind_codeocean_api.codeocean.CodeOceanClient.search_all_data_assets"
-    )
+    @patch("codeocean.data_asset.DataAssets.search_data_assets")
     @patch("logging.error")
     @patch("logging.debug")
     def test_find_external_assets(
@@ -325,9 +317,7 @@ class TestAPIHandler(unittest.TestCase):
         )
         mock_log_error.assert_called_once()
 
-    @patch(
-        "aind_codeocean_api.codeocean.CodeOceanClient.search_all_data_assets"
-    )
+    @patch("codeocean.data_asset.DataAssets.search_data_assets")
     @patch("logging.debug")
     @patch("logging.info")
     def test_find_archived_data_assets_to_delete(
