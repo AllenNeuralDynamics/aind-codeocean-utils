@@ -288,7 +288,6 @@ class APIHandler:
                 break_flag = True
         return response
 
-
     def create_data_asset_and_update_permissions(
         self,
         request: DataAssetUpdateParams,
