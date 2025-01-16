@@ -6,14 +6,10 @@ from datetime import datetime
 from typing import Dict, Iterator, List, Optional
 
 import requests
-from aind_codeocean_api.codeocean import CodeOceanClient
-from aind_codeocean_api.models.computations_requests import (
-    ComputationDataAsset,
-)
-from aind_codeocean_api.models.data_assets_requests import (
-    CreateDataAssetRequest,
-)
 from botocore.client import BaseClient
+from codeocean import CodeOcean
+from codeocean.computation import InputDataAsset
+from codeocean.data_asset import DataAssetUpdateParams
 
 
 class APIHandler:
@@ -21,7 +17,7 @@ class APIHandler:
 
     def __init__(
         self,
-        co_client: CodeOceanClient,
+        co_client: CodeOcean,
         s3: Optional[BaseClient] = None,
         dryrun: bool = False,
     ):
@@ -107,7 +103,7 @@ class APIHandler:
                     f"new_tags={mapped_tags},)"
                 )
             else:
-                response = self.co_client.update_data_asset(
+                response = self.co_client.data_assets.update_metadata(
                     data_asset_id=data_asset_id,
                     new_name=data_asset_name,
                     new_tags=list(mapped_tags),
@@ -132,9 +128,9 @@ class APIHandler:
 
         """
 
-        assets = self.co_client.search_all_data_assets(archived=True).json()[
-            "results"
-        ]
+        assets = self.co_client.data_assets.search_data_assets(
+            archived=True
+        ).json()["results"]
 
         assets_to_delete = []
 
@@ -191,7 +187,9 @@ class APIHandler:
 
         """
 
-        response = self.co_client.search_all_data_assets(type="dataset")
+        response = self.co_client.data_assets.search_data_assets(
+            type="dataset"
+        )
         assets = response.json()["results"]
 
         for asset in assets:
@@ -276,14 +274,14 @@ class APIHandler:
         num_of_checks = 0
         break_flag = False
         time.sleep(pause_interval)
-        response = self.co_client.get_data_asset(data_asset_id)
+        response = self.co_client.data_assets.get_data_asset(data_asset_id)
         if ((pause_interval * num_of_checks) > timeout_seconds) or (
             response.status_code == 200
         ):
             break_flag = True
         while not break_flag:
             time.sleep(pause_interval)
-            response = self.co_client.get_data_asset(data_asset_id)
+            response = self.co_client.data_assets.get_data_asset(data_asset_id)
             num_of_checks += 1
             if ((pause_interval * num_of_checks) > timeout_seconds) or (
                 response.status_code == 200
@@ -291,9 +289,7 @@ class APIHandler:
                 break_flag = True
         return response
 
-    def check_data_assets(
-        self, data_assets: List[ComputationDataAsset]
-    ) -> None:
+    def check_data_assets(self, data_assets: List[InputDataAsset]) -> None:
         """
         Check if data assets exist.
 
@@ -311,10 +307,10 @@ class APIHandler:
         """
         for data_asset in data_assets:
             assert isinstance(
-                data_asset, ComputationDataAsset
-            ), "Data assets must be of type ComputationDataAsset"
+                data_asset, InputDataAsset
+            ), "Data assets must be of type InputDataAsset"
             data_asset_id = data_asset.id
-            response = self.co_client.get_data_asset(data_asset_id)
+            response = self.co_client.data_assets.get_data_asset(data_asset_id)
             if response.status_code == 404:
                 raise FileNotFoundError(f"Unable to find: {data_asset_id}")
             elif response.status_code != 200:
@@ -324,7 +320,7 @@ class APIHandler:
 
     def create_data_asset_and_update_permissions(
         self,
-        request: CreateDataAssetRequest,
+        request: DataAssetUpdateParams,
         assets_viewable_to_everyone: bool = True,
     ) -> requests.Response:
         """
@@ -333,7 +329,7 @@ class APIHandler:
 
         Parameters
         ----------
-        request : CreateDataAssetRequest
+        request : DataAssetUpdateParams
 
         Notes
         -----
@@ -344,7 +340,9 @@ class APIHandler:
         requests.Response
         """
 
-        create_data_asset_response = self.co_client.create_data_asset(request)
+        create_data_asset_response = (
+            self.co_client.data_assets.create_data_asset(request)
+        )
         create_data_asset_response_json = create_data_asset_response.json()
 
         if create_data_asset_response_json.get("id") is None:
@@ -366,8 +364,10 @@ class APIHandler:
                 raise FileNotFoundError(f"Unable to find: {data_asset_id}")
 
             # Make data asset viewable to everyone
-            update_data_perm_response = self.co_client.update_permissions(
-                data_asset_id=data_asset_id, everyone="viewer"
+            update_data_perm_response = (
+                self.co_client.data_assets.update_permissions(
+                    data_asset_id=data_asset_id, everyone="viewer"
+                )
             )
             logging.info(
                 "Permissions response: "
