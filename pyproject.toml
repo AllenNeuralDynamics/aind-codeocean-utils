@@ -19,6 +19,7 @@ dynamic = ["version"]
 dependencies = [
     "codeocean",
     "aind-data-schema",
+    "botocore"
 ]
 
 [project.optional-dependencies]
