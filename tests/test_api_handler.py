@@ -8,12 +8,13 @@ from pathlib import Path
 from unittest.mock import MagicMock, call, patch
 
 from codeocean import CodeOcean
-from requests import Response
+from codeocean.data_asset import DataAsset, DataAssetSearchParams
 
 from aind_codeocean_utils.api_handler import APIHandler
 
 TEST_DIRECTORY = Path(os.path.dirname(os.path.realpath(__file__)))
-MOCK_RESPONSE_FILE = TEST_DIRECTORY / "resources" / "co_responses.json"
+MOCK_RESPONSE_FILE = TEST_DIRECTORY / "resources" / "iterator_response.json"
+MOCK_RESPONSE_FILE2 = TEST_DIRECTORY / "resources" / "co_responses.json"
 
 
 class TestAPIHandler(unittest.TestCase):
@@ -24,246 +25,92 @@ class TestAPIHandler(unittest.TestCase):
         """Load mock_db before running tests."""
 
         co_mock_token = "abc-123"
-        co_mock_domain = "https://aind.com"
+        co_mock_domain = "https://example.com"
 
-        with open(MOCK_RESPONSE_FILE) as f:
-            json_contents = json.load(f)
-        mock_search_all_data_assets_success_response = Response()
-        mock_search_all_data_assets_success_response.status_code = 200
-        mock_search_all_data_assets_success_response._content = json.dumps(
-            json_contents["search_all_data_assets"]
-        ).encode("utf-8")
+        with open(MOCK_RESPONSE_FILE2) as f:
+            contents = json.load(f)
         mock_co_client = CodeOcean(domain=co_mock_domain, token=co_mock_token)
         mock_s3_client = MagicMock()
-        cls.mock_search_all_data_assets_success_response = (
-            mock_search_all_data_assets_success_response
-        )
+        cls.mock_search_all_data_assets = [
+            DataAsset.from_json(json.dumps(r))
+            for r in contents["search_all_data_assets"]["results"]
+        ]
         cls.api_handler = APIHandler(co_client=mock_co_client)
         cls.api_handler_dry = APIHandler(co_client=mock_co_client, dryrun=True)
         cls.api_handler_s3 = APIHandler(
             co_client=mock_co_client, s3=mock_s3_client
         )
 
-    @patch("codeocean.data_asset.DataAssets.search_data_assets")
+    @patch("codeocean.data_asset.DataAssets.search_data_assets_iterator")
     @patch("codeocean.data_asset.DataAssets.update_metadata")
-    @patch("logging.debug")
-    @patch("logging.info")
     def test_update_tags(
         self,
-        mock_log_info: MagicMock,
-        mock_log_debug: MagicMock,
         mock_update: MagicMock,
-        mock_get: MagicMock,
+        mock_search_data_assets_iterator: MagicMock,
     ):
         """Tests update tags changes tags correctly."""
-        mock_get.return_value = (
-            self.mock_search_all_data_assets_success_response
+        mock_search_data_assets_iterator.return_value = (
+            self.mock_search_all_data_assets
         )
-        mock_update_response = Response()
-        mock_update_response.status_code = 200
-        mock_update_response._content = b'{"message": "success"}'
-        mock_update.return_value = mock_update_response
-        response = self.api_handler.co_client.data_assets.search_data_assets()
-        data_assets = response.json()["results"]
-        self.api_handler.update_tags(
-            tags_to_remove=["test"],
-            tags_to_add=["new_tag"],
-            tags_to_replace={"ECEPHYS": "ecephys"},
-            data_assets=data_assets,
+        data_assets = (
+            self.api_handler.co_client.data_assets.search_data_assets_iterator(
+                search_params=DataAssetSearchParams(limit=1000)
+            )
         )
-
-        expected_calls = [
-            {
-                "data_asset_id": "0faf14aa-13b9-450d-b26a-632935a4b763",
-                "new_name": "ecephys_655019_2023-04-03_18-10-10",
-                "new_tags": {"raw", "ecephys", "655019", "new_tag"},
-            },
-            {
-                "data_asset_id": "84586a1c-79cc-4240-b340-6049fe8469c2",
-                "new_name": "ecephys_655019_2023-04-03_18-17-09",
-                "new_tags": {"ecephys", "655019", "new_tag", "raw"},
-            },
-            {
-                "data_asset_id": "1936ae3a-73a8-422c-a7b1-1768732c6289",
-                "new_name": (
-                    "ecephys_661398_2023-03-31_17-01-09"
-                    "_nwb_2023-06-01_14-50-08"
-                ),
-                "new_tags": {"new_tag"},
-            },
-            {
-                "data_asset_id": "2481baf2-e9e8-4416-9a0b-d2ffe5782071",
-                "new_name": (
-                    "ecephys_660166_2023-03-16_18-30-14"
-                    "_curated_2023-03-24_17-54-16"
-                ),
-                "new_tags": {"new_tag"},
-            },
-            {
-                "data_asset_id": "fcd8bc84-bd48-4af7-8826-da5ceb5cdd3a",
-                "new_name": "ecephys_636766_2023-01-25_00-00-00",
-                "new_tags": {"new_tag"},
-            },
-            {
-                "data_asset_id": "fc915970-5489-4b6d-af94-620b067cd2cd",
-                "new_name": (
-                    "ecephys_636766_2023-01-23_00-00-00"
-                    "_sorted-ks2.5_2023-06-01_14-48-42"
-                ),
-                "new_tags": {"new_tag"},
-            },
-            {
-                "data_asset_id": "63f2d2de-4af8-4397-94ab-9484c8e8c847",
-                "new_name": (
-                    "ecephys_622155_2022-05-31_15-29-16_2023-06-01_14-45-05"
-                ),
-                "new_tags": {"new_tag"},
-            },
-            {
-                "data_asset_id": "fa312ea4-6068-4a4e-a40b-e8c73c9660d0",
-                "new_name": (
-                    "multiplane-ophys_438912_2019-04-17_15-19-14"
-                    "_processed_2024-02-14_19-44-46"
-                ),
-                "new_tags": {"pipeline-v3.0", "multiplane-ophys", "new_tag"},
-            },
-        ]
-        actual_calls = [c.kwargs for c in mock_update.mock_calls]
-        for row in actual_calls:
-            row["new_tags"] = set(row["new_tags"])
-        self.assertEqual(expected_calls, actual_calls)
-        expected_debug_calls = [
-            call(f"Updating data asset: {data_asset}")
-            for data_asset in data_assets
-        ]
-        mock_log_debug.assert_has_calls(expected_debug_calls)
-        mock_log_info.assert_has_calls(
-            [call({"message": "success"}) for _ in data_assets]
+        with self.assertLogs(level="DEBUG") as captured:
+            self.api_handler.update_tags(
+                tags_to_remove=["test"],
+                tags_to_add=["new_tag"],
+                tags_to_replace={"ECEPHYS": "ecephys"},
+                data_assets=data_assets,
+            )
+        self.assertEqual(16, len(captured.output))
+        self.assertEqual(
+            {"ecephys", "655019", "raw", "new_tag"},
+            mock_update.mock_calls[0].kwargs["update_params"].tags,
+        )
+        self.assertEqual(
+            {"raw", "655019", "ecephys", "new_tag"},
+            mock_update.mock_calls[2].kwargs["update_params"].tags,
+        )
+        self.assertEqual(
+            {"new_tag"},
+            mock_update.mock_calls[4].kwargs["update_params"].tags,
+        )
+        self.assertEqual(
+            {"new_tag"},
+            mock_update.mock_calls[6].kwargs["update_params"].tags,
+        )
+        self.assertEqual(
+            {"new_tag"},
+            mock_update.mock_calls[8].kwargs["update_params"].tags,
         )
 
-    @patch("codeocean.data_asset.DataAssets.search_data_assets")
+    @patch("codeocean.data_asset.DataAssets.search_data_assets_iterator")
     @patch("codeocean.data_asset.DataAssets.update_metadata")
-    @patch("logging.debug")
-    @patch("logging.info")
-    def test_update_tags_with_nones(
-        self,
-        mock_log_info: MagicMock,
-        mock_log_debug: MagicMock,
-        mock_update: MagicMock,
-        mock_get: MagicMock,
-    ):
-        """Tests that NoneType inputs are handled correctly."""
-        mock_get.return_value = (
-            self.mock_search_all_data_assets_success_response
-        )
-        mock_update_response = Response()
-        mock_update_response.status_code = 200
-        mock_update_response._content = b'{"message": "success"}'
-        mock_update.return_value = mock_update_response
-        response = self.api_handler.co_client.data_assets.search_data_assets()
-        data_assets = response.json()["results"]
-        self.api_handler.update_tags(
-            tags_to_add=["new_tag"],
-            tags_to_replace={"ECEPHYS": "ecephys"},
-            data_assets=data_assets,
-        )
-        self.api_handler.update_tags(
-            tags_to_remove=["test"],
-            tags_to_replace={"ECEPHYS": "ecephys"},
-            data_assets=data_assets,
-        )
-        self.api_handler.update_tags(
-            tags_to_remove=["test"],
-            tags_to_add=["new_tag"],
-            data_assets=data_assets,
-        )
-        self.api_handler.update_tags(
-            tags_to_add=["new_tag"],
-            data_assets=data_assets,
-        )
-        self.api_handler.update_tags(
-            tags_to_remove=["test"],
-            data_assets=data_assets,
-        )
-        self.api_handler.update_tags(
-            tags_to_replace={"ECEPHYS": "ecephys"},
-            data_assets=data_assets,
-        )
-        self.api_handler.update_tags(
-            data_assets=data_assets,
-        )
-        data_assets_with_no_tags = [
-            {
-                "created": 1685645105,
-                "description": "",
-                "files": 10,
-                "id": "63f2d2de-4af8-4397-94ab-9484c8e8c847",
-                "last_used": 0,
-                "name": "test_data_with_empty_tags",
-                "sourceBucket": {
-                    "bucket": "",
-                    "origin": "local",
-                    "prefix": "",
-                },
-                "state": "ready",
-                "tags": [],
-                "type": "dataset",
-            },
-            {
-                "created": 1685645105,
-                "description": "",
-                "files": 10,
-                "id": "63f2d2de-4af8-4397-94ab-9484c8e8c847",
-                "last_used": 0,
-                "name": "test_data_with_missing_field",
-                "sourceBucket": {
-                    "bucket": "",
-                    "origin": "local",
-                    "prefix": "",
-                },
-                "state": "ready",
-                "type": "dataset",
-            },
-        ]
-        self.api_handler.update_tags(
-            tags_to_replace={"ECEPHYS": "ecephys"},
-            data_assets=data_assets_with_no_tags,
-        )
-        mock_log_info.assert_called()
-        mock_log_debug.assert_called()
-
-    @patch("codeocean.data_asset.DataAssets.search_data_assets")
-    @patch("codeocean.data_asset.DataAssets.update_metadata")
-    @patch("logging.debug")
-    @patch("logging.info")
     def test_update_tags_dryrun(
         self,
-        mock_log_info: MagicMock,
-        mock_log_debug: MagicMock,
         mock_update: MagicMock,
-        mock_get: MagicMock,
+        mock_search_data_assets_iterator: MagicMock,
     ):
         """Tests update tags changes tags correctly."""
-        mock_get.return_value = (
-            self.mock_search_all_data_assets_success_response
+        mock_search_data_assets_iterator.return_value = (
+            self.mock_search_all_data_assets
         )
-        response = (
-            self.api_handler_dry.co_client.data_assets.search_data_assets()
+        data_assets = (
+            self.api_handler.co_client.data_assets.search_data_assets_iterator(
+                search_params=DataAssetSearchParams(limit=1000)
+            )
         )
-        data_assets = response.json()["results"]
-        self.api_handler_dry.update_tags(
-            tags_to_remove=["test"],
-            tags_to_add=["new_tag"],
-            data_assets=data_assets,
-        )
+        with self.assertLogs(level="DEBUG") as captured:
+            self.api_handler_dry.update_tags(
+                tags_to_remove=["test"],
+                tags_to_add=["new_tag"],
+                data_assets=data_assets,
+            )
 
         mock_update.assert_not_called()
-        expected_debug_calls = [
-            call(f"Updating data asset: {data_asset}")
-            for data_asset in data_assets
-        ]
-        mock_log_debug.assert_has_calls(expected_debug_calls)
-        mock_log_info.assert_called()
+        self.assertEqual(16, len(captured.output))
 
     def test_bucket_prefix_exists(self):
         """Tests bucket_prefix_exists evaluation from boto response."""
@@ -282,20 +129,16 @@ class TestAPIHandler(unittest.TestCase):
         )
         self.assertTrue(resp)
 
-    @patch("codeocean.data_asset.DataAssets.search_data_assets")
-    @patch("logging.error")
-    @patch("logging.debug")
+    @patch("codeocean.data_asset.DataAssets.search_data_assets_iterator")
     def test_find_external_assets(
         self,
-        mock_debug: MagicMock,
-        mock_log_error: MagicMock,
-        mock_get: MagicMock,
+        mock_search_data_assets_iterator: MagicMock,
     ):
-        """Tests find_external_data_assets and
-        find_nonexistent_external_data_assets methods"""
-        mock_get.return_value = (
-            self.mock_search_all_data_assets_success_response
+        """Tests find_external_data_assets method"""
+        mock_search_data_assets_iterator.return_value = (
+            self.mock_search_all_data_assets
         )
+
         self.api_handler_s3.s3.list_objects.side_effect = [
             {},
             Exception("Error"),
@@ -305,6 +148,26 @@ class TestAPIHandler(unittest.TestCase):
 
         resp = list(self.api_handler_s3.find_external_data_assets())
         self.assertEqual(2, len(resp))
+
+    @patch("codeocean.data_asset.DataAssets.search_data_assets_iterator")
+    @patch("logging.error")
+    @patch("logging.debug")
+    def test_find_non_existent_external_assets(
+        self,
+        mock_debug: MagicMock,
+        mock_log_error: MagicMock,
+        mock_search_data_assets_iterator: MagicMock,
+    ):
+        """Tests find_nonexistent_external_data_assets method"""
+        mock_search_data_assets_iterator.return_value = (
+            self.mock_search_all_data_assets
+        )
+        self.api_handler_s3.s3.list_objects.side_effect = [
+            {},
+            Exception("Error"),
+            {"CommonPrefixes": 1},
+            {"CommonPrefixes": 2},
+        ]
 
         resp = list(
             self.api_handler_s3.find_nonexistent_external_data_assets()
@@ -317,20 +180,20 @@ class TestAPIHandler(unittest.TestCase):
         )
         mock_log_error.assert_called_once()
 
-    @patch("codeocean.data_asset.DataAssets.search_data_assets")
+    @patch("codeocean.data_asset.DataAssets.search_data_assets_iterator")
     @patch("logging.debug")
     @patch("logging.info")
     def test_find_archived_data_assets_to_delete(
         self,
         mock_log_info: MagicMock,
         mock_log_debug: MagicMock,
-        mock_get: MagicMock,
+        mock_search_data_assets_iterator: MagicMock,
     ):
         """Tests find_archived_data_assets_to_delete method with successful
         responses from CodeOCean"""
 
-        mock_get.return_value = (
-            self.mock_search_all_data_assets_success_response
+        mock_search_data_assets_iterator.return_value = (
+            self.mock_search_all_data_assets
         )
 
         keep_after = datetime.datetime(year=2023, month=9, day=1)

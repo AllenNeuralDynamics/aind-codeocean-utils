@@ -1,14 +1,17 @@
 """Module of classes to handle interfacing with the Code Ocean index."""
 
 import logging
-import time
 from datetime import datetime
 from typing import Dict, Iterator, List, Optional
 
-import requests
 from botocore.client import BaseClient
 from codeocean import CodeOcean
-from codeocean.data_asset import DataAssetUpdateParams
+from codeocean.data_asset import (
+    DataAsset,
+    DataAssetSearchParams,
+    DataAssetType,
+    DataAssetUpdateParams,
+)
 
 
 class APIHandler:
@@ -41,7 +44,7 @@ class APIHandler:
         tags_to_remove: Optional[List[str]] = None,
         tags_to_add: Optional[List[str]] = None,
         tags_to_replace: Optional[Dict[str, str]] = None,
-        data_assets=Iterator[dict],
+        data_assets=Iterator[DataAsset],
     ) -> None:
         """
         Updates tags for a list of data assets. Will first remove tags in the
@@ -59,7 +62,7 @@ class APIHandler:
         tags_to_replace: Optional[Dict[str, str]]
           Optional dictionary of tags to replace. For example,
           {"old_tag0": "new_tag0", "old_tag1": "new_tag1"}.
-        data_assets : Iterator[dict]
+        data_assets : Iterator[DataAsset]
           An iterator of data assets. The shape of the response is described
           at:
           "https://docs.codeocean.com
@@ -81,37 +84,39 @@ class APIHandler:
         )
         for data_asset in data_assets:
             # Remove tags in tags_to_remove
-            tags = (
-                set()
-                if data_asset.get("tags") is None
-                else set(data_asset["tags"])
-            )
+            # noinspection PyTypeChecker
+            tags = set() if data_asset.tags is None else set(data_asset.tags)
             tags.difference_update(tags_to_remove)
             tags.update(tags_to_add)
             mapped_tags = {tags_to_replace.get(tag, tag) for tag in tags}
-            data_asset_id = data_asset["id"]
-            data_asset_name = data_asset["name"]
-            logging.debug(f"Updating data asset: {data_asset}")
-            # new_name is a required field, we can set it to the original name
+            data_asset_id = data_asset.id
+            data_asset_name = data_asset.name
+            update_data_asset_params = DataAssetUpdateParams(
+                name=data_asset_name,
+                description=data_asset.description,
+                tags=mapped_tags,
+                mount=data_asset.mount,
+            )
+            logging.debug(
+                f"Updating data asset: {data_asset} with "
+                f"{update_data_asset_params}."
+            )
             if self.dryrun is True:
                 logging.info(
-                    f"(dryrun): "
-                    f"co_client.update_data_asset("
-                    f"data_asset_id={data_asset_id},"
-                    f"new_name={data_asset_name},"
-                    f"new_tags={mapped_tags},)"
+                    f"(dryrun): co_client.data_assets.update_metadata("
+                    f"data_asset_id={data_asset_id}, "
+                    f"update_params={update_data_asset_params})"
                 )
             else:
                 response = self.co_client.data_assets.update_metadata(
                     data_asset_id=data_asset_id,
-                    new_name=data_asset_name,
-                    new_tags=list(mapped_tags),
+                    update_params=update_data_asset_params,
                 )
-                logging.info(response.json())
+                logging.info(f"Code Ocean Response: {response}")
 
     def find_archived_data_assets_to_delete(
         self, keep_after: datetime
-    ) -> List[dict]:
+    ) -> List[DataAsset]:
         """
         Find archived data assets which were last used before the keep_after
         datetime.
@@ -122,22 +127,23 @@ class APIHandler:
 
         Returns
         -------
-        List[dict]
+        List[DataAsset]
           A list of data assets objects
 
         """
 
-        assets = self.co_client.data_assets.search_data_assets(
-            archived=True
-        ).json()["results"]
+        search_params = DataAssetSearchParams(archived=True, limit=1000)
+        assets = self.co_client.data_assets.search_data_assets_iterator(
+            search_params=search_params
+        )
 
         assets_to_delete = []
 
         for asset in assets:
-            created = datetime.fromtimestamp(asset["created"])
+            created = datetime.fromtimestamp(asset.created)
             last_used = (
-                datetime.fromtimestamp(asset["last_used"])
-                if asset["last_used"] != 0
+                datetime.fromtimestamp(asset.last_used)
+                if asset.last_used != 0
                 else None
             )
 
@@ -153,15 +159,15 @@ class APIHandler:
         internal_count = 0
         internal_size = 0
         for asset in assets_to_delete:
-            size = asset.get("size", 0)
-            is_external = "sourceBucket" in asset
+            size = asset.size if asset.size else 0
+            is_external = asset.source_bucket is not None
             if is_external:
                 external_count += 1
                 external_size += size
             else:
                 internal_count += 1
                 internal_size += size
-            logging.info(f"name: {asset['name']}, type: {asset['type']}")
+            logging.info(f"name: {asset.name}, type: {asset.type}")
 
         logging.info(
             f"{len(assets_to_delete)}/{len(assets)} archived assets deletable"
@@ -175,28 +181,29 @@ class APIHandler:
 
         return assets_to_delete
 
-    def find_external_data_assets(self) -> Iterator[dict]:
+    def find_external_data_assets(self) -> Iterator[DataAsset]:
         """
         Find external data assets by checking if the data asset responses
         from CodeOcean have a source bucket and are of type 'dataset'.
         Returns
         -------
-        Iterator[dict]
+        Iterator[DataAsset]
           An iterator of data assets objects
 
         """
-
-        response = self.co_client.data_assets.search_data_assets(
-            type="dataset"
+        search_params = DataAssetSearchParams(
+            type=DataAssetType.Dataset, limit=1000
         )
-        assets = response.json()["results"]
+        assets = self.co_client.data_assets.search_data_assets_iterator(
+            search_params=search_params
+        )
 
         for asset in assets:
-            bucket = asset.get("sourceBucket", {}).get("bucket", None)
-            if bucket:
+            source_bucket = asset.source_bucket
+            if source_bucket and source_bucket.bucket and source_bucket.prefix:
                 yield asset
 
-    def find_nonexistent_external_data_assets(self) -> Iterator[dict]:
+    def find_nonexistent_external_data_assets(self) -> Iterator[DataAsset]:
         """
         Find external data assets that do not exist in S3. Makes a call
         to CodeOcean and returns an iterator over external data assets.
@@ -205,19 +212,17 @@ class APIHandler:
         data asset will not be added to the return response.
         Returns
         -------
-        Iterator[dict]
+        Iterator[DataAsset]
            An iterator of data asset objects.
 
         """
 
         for asset in self.find_external_data_assets():
-            sb = asset["sourceBucket"]
+            sb = asset.source_bucket
 
             try:
-                exists = self._bucket_prefix_exists(sb["bucket"], sb["prefix"])
-                logging.debug(
-                    f"{sb['bucket']} {sb['prefix']} exists? {exists}"
-                )
+                exists = self._bucket_prefix_exists(sb.bucket, sb.prefix)
+                logging.debug(f"{sb.bucket} {sb.prefix} exists? {exists}")
                 if not exists:
                     yield asset
             except Exception as e:
@@ -240,108 +245,9 @@ class APIHandler:
 
         """
 
+        # TODO: use head object command, which is cheaper
         prefix = prefix.rstrip("/")
         resp = self.s3.list_objects(
             Bucket=bucket, Prefix=prefix, Delimiter="/", MaxKeys=1
         )
         return "CommonPrefixes" in resp
-
-    def wait_for_data_availability(
-        self,
-        data_asset_id: str,
-        timeout_seconds: int = 300,
-        pause_interval=10,
-    ) -> requests.Response:
-        """
-        There is a lag between when a register data request is made and
-        when the data is available to be used in a capsule.
-        Parameters
-        ----------
-        data_asset_id : str
-            ID of the data asset to check for.
-        timeout_seconds : int
-            Roughly how long the method should check if the data is available.
-        pause_interval : int
-            How many seconds between when the backend is queried.
-
-        Returns
-        -------
-        requests.Response
-
-        """
-
-        num_of_checks = 0
-        break_flag = False
-        time.sleep(pause_interval)
-        response = self.co_client.data_assets.get_data_asset(data_asset_id)
-        if ((pause_interval * num_of_checks) > timeout_seconds) or (
-            response.status_code == 200
-        ):
-            break_flag = True
-        while not break_flag:
-            time.sleep(pause_interval)
-            response = self.co_client.data_assets.get_data_asset(data_asset_id)
-            num_of_checks += 1
-            if ((pause_interval * num_of_checks) > timeout_seconds) or (
-                response.status_code == 200
-            ):
-                break_flag = True
-        return response
-
-    def create_data_asset_and_update_permissions(
-        self,
-        request: DataAssetUpdateParams,
-        assets_viewable_to_everyone: bool = True,
-    ) -> requests.Response:
-        """
-        Register a data asset. Can also optionally update the permissions on
-        the data asset.
-
-        Parameters
-        ----------
-        request : DataAssetUpdateParams
-
-        Notes
-        -----
-        The credentials for the s3 bucket must be set in the environment.
-
-        Returns
-        -------
-        requests.Response
-        """
-
-        create_data_asset_response = (
-            self.co_client.data_assets.create_data_asset(request)
-        )
-        create_data_asset_response_json = create_data_asset_response.json()
-
-        if create_data_asset_response_json.get("id") is None:
-            raise KeyError(
-                f"Something went wrong registering"
-                f" '{request.name}'. "
-                f"Response Status Code: "
-                f"{create_data_asset_response.status_code}. "
-                f"Response Message: {create_data_asset_response_json}"
-            )
-
-        if assets_viewable_to_everyone:
-            data_asset_id = create_data_asset_response_json["id"]
-            response_data_available = self.wait_for_data_availability(
-                data_asset_id
-            )
-
-            if response_data_available.status_code != 200:
-                raise FileNotFoundError(f"Unable to find: {data_asset_id}")
-
-            # Make data asset viewable to everyone
-            update_data_perm_response = (
-                self.co_client.data_assets.update_permissions(
-                    data_asset_id=data_asset_id, everyone="viewer"
-                )
-            )
-            logging.info(
-                "Permissions response: "
-                f"{update_data_perm_response.status_code}"
-            )
-
-        return create_data_asset_response
