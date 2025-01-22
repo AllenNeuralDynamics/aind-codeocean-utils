@@ -31,79 +31,40 @@ pip install -e .[dev]
 
 The package includes helper functions to interact with Code Ocean:
 
-### `CodeOceanJob`
+### `APIHandler`
 
-This class enables one to run a job that:
+This class enables one to:
 
-1. Registers a new asset to Code Ocean from s3
-2. Runs a capsule/pipeline on the newly registered asset (or an existing assey)
-3. Captures the run results into a new asset
+1. Update asset tags in Code Ocean
+2. Find external data assets that do not exist in S3
+3. Find external data assets
 
-Steps 1 and 3 are optional, while step 2 (running the computation) is mandatory.
-
-Here is a full example that registers a new ecephys asset, runs the spike sorting
-capsule with some parameters, and registers the results:
 
 ```python
 import os
 
-from aind_codeocean_api.codeocean import CodeOceanClient
-from aind_codeocean_utils.codeocean_job import (
-    CodeOceanJob, CodeOceanJobConfig
-)
+from codeocean.client import CodeOcean
+from aind_codeocean_utils.api_handler import APIHandler
 
-# Set up the CodeOceanClient from aind_codeocean_api
+# Get token and domain parameters for CodeOcean client
 CO_TOKEN = os.environ["CO_TOKEN"]
 CO_DOMAIN = os.environ["CO_DOMAIN"]
 
-co_client = CodeOceanClient(domain=CO_DOMAIN, token=CO_TOKEN)
+co_client = CodeOcean(domain=CO_DOMAIN, token=CO_TOKEN)
 
-# Define Job Parameters
-job_config_dict = dict(
-    register_config = dict(
-        asset_name="test_dataset_for_codeocean_job",
-        mount="ecephys_701305_2023-12-26_12-22-25",
-        bucket="aind-ephys-data",
-        prefix="ecephys_701305_2023-12-26_12-22-25",
-        tags=["codeocean_job_test", "ecephys", "701305", "raw"],
-        custom_metadata={
-            "modality": "extracellular electrophysiology",
-            "data level": "raw data",
-        },
-        viewable_to_everyone=True
-    ),
-    run_capsule_config = dict(
-        data_assets=None, # when None, the newly registered asset will be used
-        capsule_id="a31e6c81-49a5-4f1c-b89c-2d47ae3e02b4",
-        run_parameters=["--debug", "--no-remove-out-channels"]
-    ),
-    capture_result_config = dict(
-        process_name="sorted",
-        tags=["np-ultra"] # additional tags to the ones inherited from input
-    )
+api_handler = APIHandler(co_client)
+
+data_assets = [
+  co_client.data_assets.get_data_asset(data_asset_id="abc"),
+  co_client.data_assets.get_data_asset(data_asset_id="def")
+]
+
+api_handler.update_tags(
+  tags_to_remove=["test"],
+  tags_to_add=["new_tag"],
+  data_assets=data_assets,
 )
-
-# instantiate config model
-job_config = CodeOceanJobConfig(**job_config_dict)
-
-# instantiate code ocean job
-co_job = CodeOceanJob(co_client=co_client, job_config=job_config)
-
-# run and wait for results
-job_response = co_job.run_job()
 ```
-
-This job will:
-1. Register the `test_dataset_for_codeocean_job` asset from the specified s3 bucket and prefix
-2. Run the capsule `a31e6c81-49a5-4f1c-b89c-2d47ae3e02b4` with the specified parameters
-3. Register the result as `test_dataset_for_codeocean_job_sorter_{date-time}`
-
-
-To run a computation on existing data assets, do not provide the `register_config` and
-provide the `data_asset` field in the `run_capsule_config`.
-
-To skip capturing the result, do not provide the `capture_result_config` option.
-
 
 ## Contributing
 

@@ -8,11 +8,13 @@
         "id": "0faf14aa-13b9-450d-b26a-632935a4b763",
         "last_used": 0,
         "name": "ecephys_655019_2023-04-03_18-10-10",
+        "mount": "ecephys_655019_2023-04-03_18-10-10",
         "size": 3559699653,
-        "sourceBucket": {
+        "source_bucket": {
           "bucket": "aind-ephys-data-dev-u5u0i5",
           "origin": "aws",
-          "prefix": "ecephys_655019_2023-04-03_18-10-10"
+          "prefix": "ecephys_655019_2023-04-03_18-10-10",
+          "external": true
         },
         "state": "ready",
         "tags": [
@@ -32,11 +34,13 @@
         "id": "84586a1c-79cc-4240-b340-6049fe8469c2",
         "last_used": 0,
         "name": "ecephys_655019_2023-04-03_18-17-09",
+        "mount": "ecephys_655019_2023-04-03_18-17-09",
         "size": 3559464097,
-        "sourceBucket": {
+        "source_bucket": {
           "bucket": "aind-ephys-data-dev-u5u0i5",
           "origin": "aws",
-          "prefix": "ecephys_655019_2023-04-03_18-17-09"
+          "prefix": "ecephys_655019_2023-04-03_18-17-09",
+          "external": true
         },
         "state": "ready",
         "tags": [
@@ -56,10 +60,12 @@
         "id": "1936ae3a-73a8-422c-a7b1-1768732c6289",
         "last_used": 0,
         "name": "ecephys_661398_2023-03-31_17-01-09_nwb_2023-06-01_14-50-08",
-        "sourceBucket": {
+        "mount": "ecephys_661398_2023-03-31_17-01-09_nwb_2023-06-01_14-50-08",
+        "source_bucket": {
           "bucket": "",
           "origin": "local",
-          "prefix": ""
+          "prefix": "",
+          "external": false
         },
         "state": "ready",
         "tags": [
@@ -77,10 +83,12 @@
         "id": "2481baf2-e9e8-4416-9a0b-d2ffe5782071",
         "last_used": 0,
         "name": "ecephys_660166_2023-03-16_18-30-14_curated_2023-03-24_17-54-16",
-        "sourceBucket": {
+        "mount": "ecephys_660166_2023-03-16_18-30-14_curated_2023-03-24_17-54-16",
+        "source_bucket": {
           "bucket": "",
           "origin": "local",
-          "prefix": ""
+          "prefix": "",
+          "external": false
         },
         "state": "ready",
         "tags": [
@@ -95,10 +103,12 @@
         "id": "fcd8bc84-bd48-4af7-8826-da5ceb5cdd3a",
         "last_used": 0,
         "name": "ecephys_636766_2023-01-25_00-00-00",
-        "sourceBucket": {
+        "mount": "ecephys_636766_2023-01-25_00-00-00",
+        "source_bucket": {
           "bucket": "",
           "origin": "local",
-          "prefix": ""
+          "prefix": "",
+          "external": false
         },
         "state": "ready",
         "tags": [
@@ -113,10 +123,12 @@
         "id": "fc915970-5489-4b6d-af94-620b067cd2cd",
         "last_used": 0,
         "name": "ecephys_636766_2023-01-23_00-00-00_sorted-ks2.5_2023-06-01_14-48-42",
-        "sourceBucket": {
+        "mount": "ecephys_636766_2023-01-23_00-00-00_sorted-ks2.5_2023-06-01_14-48-42",
+        "source_bucket": {
           "bucket": "",
           "origin": "local",
-          "prefix": ""
+          "prefix": "",
+          "external": false
         },
         "state": "ready",
         "tags": [
@@ -131,10 +143,12 @@
         "id": "63f2d2de-4af8-4397-94ab-9484c8e8c847",
         "last_used": 0,
         "name": "ecephys_622155_2022-05-31_15-29-16_2023-06-01_14-45-05",
-        "sourceBucket": {
+        "mount": "ecephys_622155_2022-05-31_15-29-16_2023-06-01_14-45-05",
+        "source_bucket": {
           "bucket": "",
           "origin": "local",
-          "prefix": ""
+          "prefix": "",
+          "external": false
         },
         "state": "ready",
         "tags": [
@@ -148,7 +162,8 @@
         "files": 1540, 
         "id": "fa312ea4-6068-4a4e-a40b-e8c73c9660d0", 
         "last_used": 0, 
-        "name": "multiplane-ophys_438912_2019-04-17_15-19-14_processed_2024-02-14_19-44-46", 
+        "name": "multiplane-ophys_438912_2019-04-17_15-19-14_processed_2024-02-14_19-44-46",
+        "mount": "multiplane-ophys_438912_2019-04-17_15-19-14_processed_2024-02-14_19-44-46",
         "provenance": {
           "capsule": "36173b3e-2e7b-4510-ad51-8b7e90be08bc", 
           "commit": "1ad2c544ceb4bc2da208f78c8786f5d107a29d6d", 
