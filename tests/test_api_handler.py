@@ -102,6 +102,9 @@ class TestAPIHandler(unittest.TestCase):
                 search_params=DataAssetSearchParams(limit=1000)
             )
         )
+        print(data_assets[0:2])
+
+        foobar = [DataAsset(id='0faf14aa-13b9-450d-b26a-632935a4b763'), DataAsset(id='84586a1c-79cc-4240-b340-6049fe8469c2')]
         with self.assertLogs(level="DEBUG") as captured:
             self.api_handler_dry.update_tags(
                 tags_to_remove=["test"],

@@ -38,16 +38,12 @@ This class enables one to:
 1. Update asset tags in Code Ocean
 2. Find external data assets that do not exist in S3
 3. Find external data assets
-4. Wait fucntion for assets that were just registered to wait for availability.
-5. Create data assets and update permissions.
 
 
 ```python
 import os
 
 from codeocean.client import CodeOcean
-from codeocean.data_asset import DataAssetUpdateParams
-
 from aind_codeocean_utils.api_handler import APIHandler
 
 # Get token and domain parameters for CodeOcean client
@@ -56,18 +52,17 @@ CO_DOMAIN = os.environ["CO_DOMAIN"]
 
 co_client = CodeOcean(domain=CO_DOMAIN, token=CO_TOKEN)
 
-# Define asset parameters for new data asset
-data_asset_params = DataAssetUpdateParams(
-    name="123456_2025-01-16",
-    description="",
-    tags=["raw", "pophys"],
-    mount="123456_2025-01-16",
-)
-
 api_handler = APIHandler(co_client)
 
-api_handler.create_data_asset_and_update_permissions(
-    request=data_asset_params, assets_viewable_to_everyone=True
+data_assets = [
+  co_client.data_assets.get_data_asset(data_asset_id="abc"),
+  co_client.data_assets.get_data_asset(data_asset_id="def")
+]
+
+api_handler.update_tags(
+  tags_to_remove=["test"],
+  tags_to_add=["new_tag"],
+  data_assets=data_assets,
 )
 ```
 
