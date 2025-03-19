@@ -88,18 +88,18 @@ def create_parser(
         "integer": int,
         "number": float,
         "boolean": parse_bool,
+        "file": parse_path,
     }
 
     # Add arguments based on JSON config
     for param in config["parameters"]:
+        param_type = param.get("value_type") or param.get("type")
+        param_help = f"{param.get("description")} ({param.get("help_text")})"
         kwargs: dict[str, Any] = {
-            "help": param.get("description") or param.get("help_text"),
-            "type": type_map.get(param["value_type"], str),
+            "help": param_help,
+            "type": type_map.get(param_type, str),
             "required": param.get("required", False),
         }
-        # file type args are specified differently
-        if param.get("type") == "file":
-            kwargs["type"] = parse_path
 
         # Handle default value if present
         if "default_value" in param:
@@ -120,7 +120,7 @@ def create_parser(
     return parser
 
 
-def call_function_with_cli_args(func):
+def call_function_with_cli_args(func, json_file=APP_PANEL_JSON):
     """
     Calls a given function with arguments parsed from the command line interface (CLI).
     This function uses a parser to extract CLI arguments, converts them into a dictionary,
@@ -138,7 +138,7 @@ def call_function_with_cli_args(func):
     """
     
     # Parse arguments
-    parser = create_parser()
+    parser = create_parser(json_file=json_file)
     parsed_args = parser.parse_args()
 
     # Convert Namespace to dictionary
