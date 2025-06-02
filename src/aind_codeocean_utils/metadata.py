@@ -90,6 +90,7 @@ def get_mlflow_context():
         input_location=get_codeocean_inputs(get_codeocean_client()),
         # output_location=model["artifact_path"],
         # code_url=model["source"],
+        # code_version=data.tags["mlflow.source.git.commit"],
         # software_version=model["flavors"]["python_function"]["python_version"],
         start_date_time=start_time,
         end_date_time=end_time,
