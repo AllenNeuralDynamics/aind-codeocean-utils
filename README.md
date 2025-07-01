@@ -127,6 +127,8 @@ The table below, from [semantic release](https://github.com/semantic-release/sem
 | `feat(pencil): add 'graphiteWidth' option`                                                                                                                                                       | ~~Minor~~ Feature Release                                                                                       |
 | `perf(pencil): remove graphiteWidth option`<br><br>`BREAKING CHANGE: The graphiteWidth option has been removed.`<br>`The default graphite width of 10mm is always used for performance reasons.` | ~~Major~~ Breaking Release <br /> (Note that the `BREAKING CHANGE: ` token must be in the footer of the commit) |
 
+Note: The automatic version bump workflow does not work for manual version changes. As shown above, use the appropriate `scope` and commit message that reflects changes included in a PR.
+
 ### Documentation
 To generate the rst files source files for documentation, run
 ```bash
